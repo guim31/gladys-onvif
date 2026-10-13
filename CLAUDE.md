@@ -154,7 +154,8 @@ code de ce dépôt. Compléter ce fichier quand un nouveau piège est découvert
 
 - **Cibler la dernière version publiée du cœur, pas `master`** : la spec de `master` décrit des
   fonctions non publiées. Les boutons de widget qui ouvrent un formulaire (#3168, commit 3feb2cf8)
-  sont absents de la 5.1.4 : le bouton s'affiche et n'envoie rien. Vérifier par `git tag --contains`.
+  sont absents de la 5.1.4 mais **livrés dans la 5.2.0** (sortie le 12/10/2026) : `gladys_version`
+  `>=5.2.0` si on s'en sert, ou un bouton direct en repli. Vérifier par `git tag --contains`.
 
 - Un réglage de widget ne propose en liste que les **appareils** de l'intégration
   (`source: "devices"`, seule source dynamique).
@@ -200,5 +201,15 @@ code de ce dépôt. Compléter ce fichier quand un nouveau piège est découvert
 Tout texte montré à l'utilisateur existe en **`en`, `fr`, `de` et `es`** : manifeste, contenu des widgets, messages,
 noms de fonctionnalités. L'allemand **tutoie** (« du »), l'espagnol **vouvoie** (« usted ») : décision de Guilhem,
 appliquée à ses 21 intégrations. `test/i18n.test.js` doit échouer sur une langue manquante, un texte vide ou trop
-long, et sur un « Sie »/« Ihr… » de politesse en allemand. Le store ne publie que `docs/en.md` et `docs/fr.md`
-(`DOCS_LANGUAGES` d'integration-store) : pas de doc de/es.
+long, et sur un « Sie »/« Ihr… » de politesse en allemand. Le store exige `docs/en.md` et `docs/fr.md`
+(`DOCS_LANGUAGES`) et publie aussi `docs/de.md` et `docs/es.md` quand ils existent
+(`DOCS_OPTIONAL_LANGUAGES` d'integration-store) : écrire les quatre, avec les mêmes sections.
+
+## Choix par défaut de Guilhem (12/10/2026)
+
+- Langue par défaut des noms de fonctionnalités et des textes produits par le conteneur : **`fr`**.
+- Fichier `LICENSE` Apache-2.0 (texte complet) à la racine.
+- `transports` : `local` seul quand le cloud n'est qu'une option annexe.
+- Docs `en`, `fr`, `de`, `es` avec les mêmes sections.
+- Chauffe, ouverture, sécurité : ne rien rendre pilotable « comme un thermostat » ou par un assistant
+  vocal quand une erreur serait dangereuse (leçon d'OctoPrint).
