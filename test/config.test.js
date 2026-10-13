@@ -1,33 +1,77 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeConfig, DEFAULT_CONFIG } from '../src/config.js';
+import {
+  DEFAULT_CONFIG,
+  accountsFingerprint,
+  normalizeConfig,
+  parseAddress,
+  parseHosts,
+} from '../src/config.js';
 
-test('normalizeConfig returns the defaults when called with no argument', () => {
-  assert.deepEqual(normalizeConfig(), DEFAULT_CONFIG);
+test('addresses: IP, name, port, full device service address', () => {
+  assert.deepEqual(parseAddress('192.168.001.020'), {
+    host: '192.168.1.20',
+    port: 80,
+    path: '/onvif/device_service',
+  });
+  assert.deepEqual(parseAddress('cam.lan:2020'), {
+    host: 'cam.lan',
+    port: 2020,
+    path: '/onvif/device_service',
+  });
+  assert.deepEqual(parseAddress('http://192.0.2.5:8000/onvif/device'), {
+    host: '192.0.2.5',
+    port: 8000,
+    path: '/onvif/device',
+  });
+  for (const bad of [
+    '',
+    '300.1.1.1',
+    '1234',
+    '10.0.0',
+    'https://192.0.2.5',
+    'http://u:p@192.0.2.5',
+    'a_b',
+    'http://x/?q=1',
+  ]) {
+    assert.equal(parseAddress(bad), null, bad);
+  }
+  const { hosts, invalid } = parseHosts('192.0.2.5, 192.0.2.5;cam.lan:2020\n bad!');
+  assert.deepEqual(
+    hosts.map((host) => `${host.host}:${host.port}`),
+    ['192.0.2.5:80', 'cam.lan:2020'],
+  );
+  assert.deepEqual(invalid, ['bad!']);
 });
 
-test('normalizeConfig keeps user values over the defaults', () => {
-  const config = normalizeConfig({ latitude: 45.5, longitude: -73.6, unit: 'fahrenheit' });
-  assert.equal(config.latitude, 45.5);
-  assert.equal(config.longitude, -73.6);
-  assert.equal(config.unit, 'fahrenheit');
-});
-
-test('normalizeConfig coerces numeric strings coming from a form', () => {
-  const config = normalizeConfig({ latitude: '48.8', longitude: '2.3', poll_frequency: '600' });
-  assert.equal(config.latitude, 48.8);
-  assert.equal(config.longitude, 2.3);
-  assert.equal(config.poll_frequency, 600);
-  assert.equal(typeof config.poll_frequency, 'number');
-});
-
-test('normalizeConfig falls back to the default for a missing numeric field', () => {
-  const config = normalizeConfig({ unit: 'celsius' });
-  assert.equal(config.poll_frequency, DEFAULT_CONFIG.poll_frequency);
-});
-
-test('GLADYS_PREFER_LOCAL defaults to true and only an explicit false disables it', () => {
-  assert.equal(normalizeConfig().GLADYS_PREFER_LOCAL, true);
-  assert.equal(normalizeConfig({ GLADYS_PREFER_LOCAL: true }).GLADYS_PREFER_LOCAL, true);
-  assert.equal(normalizeConfig({ GLADYS_PREFER_LOCAL: false }).GLADYS_PREFER_LOCAL, false);
+test('defaults, accounts and their fingerprint', () => {
+  const config = normalizeConfig({});
+  assert.deepEqual(config.hosts, []);
+  assert.deepEqual(config.accounts, []);
+  assert.equal(config.snapshotSeconds, Number(DEFAULT_CONFIG.snapshot_interval));
+  assert.equal(config.moveMs, 1000);
+  assert.equal(config.language, 'fr');
+  const full = normalizeConfig({
+    username: ' admin ',
+    password: 'a',
+    username_2: '',
+    password_2: 'ignored',
+    username_3: 'viewer',
+    snapshot_interval: '10',
+    move_duration: '0.5',
+    language: 'de',
+  });
+  assert.deepEqual(full.accounts, [
+    { username: 'admin', password: 'a' },
+    { username: 'viewer', password: '' },
+  ]);
+  assert.equal(full.snapshotSeconds, 10);
+  assert.equal(full.moveMs, 500);
+  assert.equal(
+    normalizeConfig({ snapshot_interval: '7', move_duration: '9', language: 'it' }).moveMs,
+    1000,
+  );
+  assert.notEqual(full.accountsKey, accountsFingerprint([{ username: 'admin', password: 'b' }]));
+  assert.ok(!full.accountsKey.includes('a') || full.accountsKey.length === 16);
+  assert.equal(normalizeConfig(null).language, 'fr');
 });

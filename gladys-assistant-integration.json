@@ -1,177 +1,810 @@
 {
   "manifest_version": 1,
   "type": "device",
-  "name": "Demo Devices Template",
+  "name": "ONVIF",
   "description": {
-    "en": "Starter template showing sensors, a switch, a dimmable light and a smart plug.",
-    "fr": "Template de démarrage : capteurs, interrupteur, lampe variable et prise connectée."
+    "en": "ONVIF IP cameras on the local network: images, pan, tilt, zoom, presets and detections.",
+    "fr": "Caméras IP ONVIF du réseau local : images, orientation, zoom, positions et détections.",
+    "de": "ONVIF-IP-Kameras im lokalen Netz: Bilder, Schwenken, Neigen, Zoom, Positionen, Erkennungen.",
+    "es": "Cámaras IP ONVIF de la red local: imágenes, orientación, zoom, posiciones y detecciones."
   },
   "version": "1.0.0",
-  "docker_image": "ghcr.io/gladysassistant/integration-template-js:1.0.0",
+  "docker_image": "ghcr.io/guim31/gladys-onvif:1.0.0",
   "gladys_version": ">=5.1.0",
-  "cover_image": "https://raw.githubusercontent.com/GladysAssistant/integration-template-js/master/cover.png",
-  "categories": ["lighting", "security", "environment"],
-  "transports": ["local", "cloud"],
+  "cover_image": "https://raw.githubusercontent.com/guim31/gladys-onvif/main/cover.png",
+  "categories": ["security"],
+  "transports": ["local"],
+  "network_discovery": [
+    {
+      "type": "udp-active-broadcast",
+      "ports": [3702]
+    }
+  ],
   "config_schema": [
     {
       "key": "intro",
       "type": "section",
-      "label": { "en": "Getting started", "fr": "Pour commencer" },
+      "label": {
+        "en": "Your cameras",
+        "fr": "Vos caméras",
+        "de": "Deine Kameras",
+        "es": "Sus cámaras"
+      },
       "description": {
-        "en": "The demo weather station reads real data from the free Open-Meteo API: pick the coordinates to observe. No account, no API key.",
-        "fr": "La station météo de démonstration lit de vraies données via l'API gratuite Open-Meteo : choisissez les coordonnées à observer. Pas de compte, pas de clé d'API."
+        "en": "Turn ONVIF on in each camera (in its app or web page, often with a dedicated user), then enter that account below. Cameras on the same network as Gladys are found automatically: open the Discovery tab.",
+        "fr": "Activez ONVIF dans chaque caméra (dans son application ou sa page web, souvent avec un utilisateur dédié), puis saisissez ce compte ci-dessous. Les caméras du même réseau que Gladys sont trouvées automatiquement : ouvrez l'onglet Découverte.",
+        "de": "Aktiviere ONVIF in jeder Kamera (in ihrer App oder Weboberfläche, oft mit einem eigenen Benutzer) und gib dieses Konto unten ein. Kameras im selben Netzwerk wie Gladys werden automatisch gefunden: Öffne den Tab „Entdecken“.",
+        "es": "Active ONVIF en cada cámara (en su aplicación o página web, a menudo con un usuario dedicado) e introduzca esa cuenta a continuación. Las cámaras de la misma red que Gladys se encuentran automáticamente: abra la pestaña Descubrir."
       },
       "links": [
         {
-          "url": "https://open-meteo.com/en/docs",
-          "label": { "en": "Open-Meteo documentation", "fr": "Documentation Open-Meteo" }
+          "url": "https://github.com/guim31/gladys-onvif/blob/main/docs/en.md",
+          "label": {
+            "en": "Setup guide",
+            "fr": "Guide d'installation",
+            "de": "Installationsanleitung",
+            "es": "Guía de instalación"
+          }
         }
       ]
     },
     {
-      "key": "latitude",
-      "type": "number",
-      "label": { "en": "Latitude", "fr": "Latitude" },
-      "description": {
-        "en": "Latitude used for the demo weather sensor.",
-        "fr": "Latitude utilisée par le capteur météo de démonstration."
+      "key": "username",
+      "type": "string",
+      "label": {
+        "en": "User name",
+        "fr": "Identifiant",
+        "de": "Benutzername",
+        "es": "Usuario"
       },
-      "placeholder": { "en": "e.g. 48.8566", "fr": "ex. 48.8566" },
-      "required": true,
-      "default": 48.8566,
-      "min": -90,
-      "max": 90
+      "description": {
+        "en": "The ONVIF account of the cameras (Tapo: the camera account created in the Tapo app).",
+        "fr": "Le compte ONVIF des caméras (Tapo : le compte caméra créé dans l'application Tapo).",
+        "de": "Das ONVIF-Konto der Kameras (Tapo: das in der Tapo-App angelegte Kamerakonto).",
+        "es": "La cuenta ONVIF de las cámaras (Tapo: la cuenta de cámara creada en la aplicación Tapo)."
+      },
+      "placeholder": {
+        "en": "e.g. admin",
+        "fr": "ex. admin",
+        "de": "z. B. admin",
+        "es": "p. ej. admin"
+      },
+      "required": false
     },
     {
-      "key": "longitude",
-      "type": "number",
-      "label": { "en": "Longitude", "fr": "Longitude" },
-      "description": {
-        "en": "Longitude used for the demo weather sensor.",
-        "fr": "Longitude utilisée par le capteur météo de démonstration."
+      "key": "password",
+      "type": "secret",
+      "label": {
+        "en": "Password",
+        "fr": "Mot de passe",
+        "de": "Passwort",
+        "es": "Contraseña"
       },
-      "placeholder": { "en": "e.g. 2.3522", "fr": "ex. 2.3522" },
-      "required": true,
-      "default": 2.3522,
-      "min": -180,
-      "max": 180
+      "required": false
     },
     {
-      "key": "unit",
-      "type": "select",
-      "label": { "en": "Temperature unit", "fr": "Unité de température" },
+      "key": "hosts",
+      "type": "string",
+      "label": {
+        "en": "Camera addresses",
+        "fr": "Adresses des caméras",
+        "de": "Kamera-Adressen",
+        "es": "Direcciones de las cámaras"
+      },
+      "description": {
+        "en": "Optional, separated by commas: only for the cameras not found automatically. Add :port when ONVIF is not on port 80 (Tapo: 2020, Reolink: 8000).",
+        "fr": "Facultatif, séparées par des virgules : seulement pour les caméras non trouvées automatiquement. Ajoutez :port quand ONVIF n'est pas sur le port 80 (Tapo : 2020, Reolink : 8000).",
+        "de": "Optional, durch Kommas getrennt: nur für Kameras, die nicht automatisch gefunden werden. Füge :Port hinzu, wenn ONVIF nicht auf Port 80 läuft (Tapo: 2020, Reolink: 8000).",
+        "es": "Opcional, separadas por comas: solo para las cámaras que no se encuentran automáticamente. Añada :puerto si ONVIF no está en el puerto 80 (Tapo: 2020, Reolink: 8000)."
+      },
+      "placeholder": {
+        "en": "e.g. 192.168.1.20, 192.168.1.21:2020",
+        "fr": "ex. 192.168.1.20, 192.168.1.21:2020",
+        "de": "z. B. 192.168.1.20, 192.168.1.21:2020",
+        "es": "p. ej. 192.168.1.20, 192.168.1.21:2020"
+      },
       "required": false,
-      "default": "celsius",
+      "default": ""
+    },
+    {
+      "key": "accounts",
+      "type": "section",
+      "label": {
+        "en": "Other accounts (optional)",
+        "fr": "Autres comptes (facultatif)",
+        "de": "Weitere Konten (optional)",
+        "es": "Otras cuentas (opcional)"
+      },
+      "description": {
+        "en": "If your cameras do not share one account, add up to two more. Each camera is tried with the accounts in order and keeps the one it accepts; an account it refused is not tried again until you change the accounts or run a search.",
+        "fr": "Si vos caméras n'ont pas toutes le même compte, ajoutez-en jusqu'à deux autres. Chaque caméra est essayée avec les comptes dans l'ordre et garde celui qu'elle accepte ; un compte refusé n'est plus essayé avant que vous changiez les comptes ou lanciez une recherche.",
+        "de": "Wenn deine Kameras nicht dasselbe Konto haben, füge bis zu zwei weitere hinzu. Jede Kamera wird der Reihe nach mit den Konten probiert und behält das akzeptierte; ein abgelehntes Konto wird erst wieder probiert, wenn du die Konten änderst oder eine Suche startest.",
+        "es": "Si sus cámaras no comparten la misma cuenta, añada hasta dos más. Cada cámara se prueba con las cuentas en orden y conserva la que acepta; una cuenta rechazada no se vuelve a probar hasta que cambie las cuentas o inicie una búsqueda."
+      }
+    },
+    {
+      "key": "username_2",
+      "type": "string",
+      "label": {
+        "en": "Second user name",
+        "fr": "Deuxième identifiant",
+        "de": "Zweiter Benutzername",
+        "es": "Segundo usuario"
+      },
+      "required": false
+    },
+    {
+      "key": "password_2",
+      "type": "secret",
+      "label": {
+        "en": "Second password",
+        "fr": "Deuxième mot de passe",
+        "de": "Zweites Passwort",
+        "es": "Segunda contraseña"
+      },
+      "required": false
+    },
+    {
+      "key": "username_3",
+      "type": "string",
+      "label": {
+        "en": "Third user name",
+        "fr": "Troisième identifiant",
+        "de": "Dritter Benutzername",
+        "es": "Tercer usuario"
+      },
+      "required": false
+    },
+    {
+      "key": "password_3",
+      "type": "secret",
+      "label": {
+        "en": "Third password",
+        "fr": "Troisième mot de passe",
+        "de": "Drittes Passwort",
+        "es": "Tercera contraseña"
+      },
+      "required": false
+    },
+    {
+      "key": "options",
+      "type": "section",
+      "label": {
+        "en": "Options",
+        "fr": "Options",
+        "de": "Optionen",
+        "es": "Opciones"
+      }
+    },
+    {
+      "key": "snapshot_interval",
+      "type": "select",
+      "label": {
+        "en": "Image refresh",
+        "fr": "Rafraîchissement des images",
+        "de": "Bildaktualisierung",
+        "es": "Actualización de imágenes"
+      },
+      "description": {
+        "en": "How often each camera image is sent to Gladys. A detection or a movement also sends a new one.",
+        "fr": "Fréquence d'envoi de l'image de chaque caméra à Gladys. Une détection ou un mouvement en envoie aussi une nouvelle.",
+        "de": "Wie oft das Bild jeder Kamera an Gladys gesendet wird. Eine Erkennung oder eine Bewegung sendet auch ein neues.",
+        "es": "Con qué frecuencia se envía la imagen de cada cámara a Gladys. Una detección o un movimiento también envía una nueva."
+      },
+      "required": false,
+      "default": "60",
       "options": [
-        { "value": "celsius", "label": { "en": "Celsius", "fr": "Celsius" } },
-        { "value": "fahrenheit", "label": { "en": "Fahrenheit", "fr": "Fahrenheit" } }
+        {
+          "value": "10",
+          "label": {
+            "en": "10 seconds",
+            "fr": "10 secondes",
+            "de": "10 Sekunden",
+            "es": "10 segundos"
+          }
+        },
+        {
+          "value": "30",
+          "label": {
+            "en": "30 seconds",
+            "fr": "30 secondes",
+            "de": "30 Sekunden",
+            "es": "30 segundos"
+          }
+        },
+        {
+          "value": "60",
+          "label": {
+            "en": "1 minute",
+            "fr": "1 minute",
+            "de": "1 Minute",
+            "es": "1 minuto"
+          }
+        },
+        {
+          "value": "300",
+          "label": {
+            "en": "5 minutes",
+            "fr": "5 minutes",
+            "de": "5 Minuten",
+            "es": "5 minutos"
+          }
+        },
+        {
+          "value": "900",
+          "label": {
+            "en": "15 minutes",
+            "fr": "15 minutes",
+            "de": "15 Minuten",
+            "es": "15 minutos"
+          }
+        }
       ]
     },
     {
-      "key": "poll_frequency",
-      "type": "number",
-      "label": { "en": "Refresh interval (s)", "fr": "Intervalle de rafraîchissement (s)" },
+      "key": "move_duration",
+      "type": "select",
+      "label": {
+        "en": "Movement length",
+        "fr": "Durée d'un mouvement",
+        "de": "Bewegungsdauer",
+        "es": "Duración de un movimiento"
+      },
       "description": {
-        "en": "How often sensors are polled, in seconds (one minute minimum).",
-        "fr": "Fréquence d'interrogation des capteurs, en secondes (une minute minimum)."
+        "en": "How long the camera turns or zooms for one tap, a widget button or a scene, when no stop follows.",
+        "fr": "Durée pendant laquelle la caméra tourne ou zoome pour un appui, un bouton du widget ou une scène, quand aucun arrêt ne suit.",
+        "de": "Wie lange sich die Kamera bei einem Tippen, einer Widget-Schaltfläche oder einer Szene dreht oder zoomt, wenn kein Stopp folgt.",
+        "es": "Cuánto tiempo gira o hace zoom la cámara con un toque, un botón del widget o una escena, cuando no sigue ninguna parada."
       },
       "required": false,
-      "default": 300,
-      "min": 60,
-      "max": 3600
+      "default": "1",
+      "options": [
+        {
+          "value": "0.5",
+          "label": {
+            "en": "Half a second",
+            "fr": "Une demi-seconde",
+            "de": "Eine halbe Sekunde",
+            "es": "Medio segundo"
+          }
+        },
+        {
+          "value": "1",
+          "label": {
+            "en": "1 second",
+            "fr": "1 seconde",
+            "de": "1 Sekunde",
+            "es": "1 segundo"
+          }
+        },
+        {
+          "value": "2",
+          "label": {
+            "en": "2 seconds",
+            "fr": "2 secondes",
+            "de": "2 Sekunden",
+            "es": "2 segundos"
+          }
+        },
+        {
+          "value": "5",
+          "label": {
+            "en": "5 seconds",
+            "fr": "5 secondes",
+            "de": "5 Sekunden",
+            "es": "5 segundos"
+          }
+        }
+      ]
+    },
+    {
+      "key": "language",
+      "type": "select",
+      "label": {
+        "en": "Language of the names",
+        "fr": "Langue des noms",
+        "de": "Sprache der Namen",
+        "es": "Idioma de los nombres"
+      },
+      "description": {
+        "en": "Names given to the features when a camera is added (Image, Motion detection, Left…).",
+        "fr": "Noms donnés aux fonctionnalités à l'ajout d'une caméra (Image, Détection de mouvement, Gauche…).",
+        "de": "Namen, die den Funktionen beim Hinzufügen einer Kamera gegeben werden (Bild, Bewegungserkennung, Links…).",
+        "es": "Nombres dados a las funciones al añadir una cámara (Imagen, Detección de movimiento, Izquierda…)."
+      },
+      "required": false,
+      "default": "fr",
+      "options": [
+        {
+          "value": "en",
+          "label": {
+            "en": "English",
+            "fr": "Anglais",
+            "de": "Englisch",
+            "es": "Inglés"
+          }
+        },
+        {
+          "value": "fr",
+          "label": {
+            "en": "French",
+            "fr": "Français",
+            "de": "Französisch",
+            "es": "Francés"
+          }
+        },
+        {
+          "value": "de",
+          "label": {
+            "en": "German",
+            "fr": "Allemand",
+            "de": "Deutsch",
+            "es": "Alemán"
+          }
+        },
+        {
+          "value": "es",
+          "label": {
+            "en": "Spanish",
+            "fr": "Espagnol",
+            "de": "Spanisch",
+            "es": "Español"
+          }
+        }
+      ]
     }
   ],
   "actions": [
     {
-      "key": "test_weather",
-      "label": { "en": "Test the weather provider", "fr": "Tester le fournisseur météo" },
-      "timeout_seconds": 30
-    },
-    {
-      "key": "identify",
-      "label": { "en": "Identify a device", "fr": "Identifier un appareil" },
-      "fields": [
-        {
-          "key": "device",
-          "type": "select",
-          "source": "devices",
-          "label": { "en": "Device", "fr": "Appareil" },
-          "required": true
-        }
-      ]
+      "key": "search",
+      "label": {
+        "en": "Search for cameras",
+        "fr": "Rechercher les caméras",
+        "de": "Kameras suchen",
+        "es": "Buscar cámaras"
+      },
+      "description": {
+        "en": "Looks for ONVIF cameras again, tries the accounts again and reports what each camera offers.",
+        "fr": "Recherche à nouveau les caméras ONVIF, réessaie les comptes et indique ce que propose chaque caméra.",
+        "de": "Sucht erneut nach ONVIF-Kameras, probiert die Konten erneut und zeigt, was jede Kamera bietet.",
+        "es": "Busca de nuevo las cámaras ONVIF, vuelve a probar las cuentas e indica lo que ofrece cada cámara."
+      },
+      "timeout_seconds": 90
     }
   ],
   "scene_triggers": [
     {
-      "key": "motion_detected",
-      "label": { "en": "Motion detected", "fr": "Mouvement détecté" },
+      "key": "detection",
+      "label": {
+        "en": "ONVIF camera detection",
+        "fr": "Détection d'une caméra ONVIF",
+        "de": "Erkennung einer ONVIF-Kamera",
+        "es": "Detección de una cámara ONVIF"
+      },
       "description": {
-        "en": "A demo motion sensor saw a person or an animal move.",
-        "fr": "Un détecteur de démonstration a vu bouger une personne ou un animal."
+        "en": "A camera starts detecting something: motion, a person, a vehicle, an animal, a line crossed, an intrusion, tampering, a sound, or its doorbell button.",
+        "fr": "Une caméra commence à détecter quelque chose : mouvement, personne, véhicule, animal, ligne franchie, intrusion, sabotage, son, ou le bouton de sa sonnette.",
+        "de": "Eine Kamera beginnt etwas zu erkennen: Bewegung, eine Person, ein Fahrzeug, ein Tier, eine überschrittene Linie, einen Einbruch, eine Manipulation, ein Geräusch oder ihren Klingelknopf.",
+        "es": "Una cámara empieza a detectar algo: movimiento, una persona, un vehículo, un animal, una línea cruzada, una intrusión, una manipulación, un sonido o el botón de su timbre."
       },
       "fields": [
         {
-          "key": "device",
+          "key": "camera",
           "type": "select",
           "source": "devices",
-          "label": { "en": "Sensor", "fr": "Détecteur" }
+          "label": {
+            "en": "Camera",
+            "fr": "Caméra",
+            "de": "Kamera",
+            "es": "Cámara"
+          }
         },
         {
-          "key": "target",
+          "key": "kind",
           "type": "multi_select",
-          "label": { "en": "What moved", "fr": "Ce qui a bougé" },
+          "label": {
+            "en": "Detection",
+            "fr": "Détection",
+            "de": "Erkennung",
+            "es": "Detección"
+          },
+          "description": {
+            "en": "Leave empty for every detection.",
+            "fr": "Laisser vide pour toutes les détections.",
+            "de": "Leer lassen für alle Erkennungen.",
+            "es": "Déjelo vacío para todas las detecciones."
+          },
           "options": [
-            { "value": "person", "label": { "en": "Person", "fr": "Personne" } },
-            { "value": "animal", "label": { "en": "Animal", "fr": "Animal" } }
+            {
+              "value": "motion",
+              "label": {
+                "en": "Motion",
+                "fr": "Mouvement",
+                "de": "Bewegung",
+                "es": "Movimiento"
+              }
+            },
+            {
+              "value": "person",
+              "label": {
+                "en": "Person",
+                "fr": "Personne",
+                "de": "Person",
+                "es": "Persona"
+              }
+            },
+            {
+              "value": "vehicle",
+              "label": {
+                "en": "Vehicle",
+                "fr": "Véhicule",
+                "de": "Fahrzeug",
+                "es": "Vehículo"
+              }
+            },
+            {
+              "value": "animal",
+              "label": {
+                "en": "Animal",
+                "fr": "Animal",
+                "de": "Tier",
+                "es": "Animal"
+              }
+            },
+            {
+              "value": "line_crossing",
+              "label": {
+                "en": "Line crossing",
+                "fr": "Franchissement de ligne",
+                "de": "Linienüberschreitung",
+                "es": "Cruce de línea"
+              }
+            },
+            {
+              "value": "intrusion",
+              "label": {
+                "en": "Intrusion",
+                "fr": "Intrusion",
+                "de": "Einbruch",
+                "es": "Intrusión"
+              }
+            },
+            {
+              "value": "tamper",
+              "label": {
+                "en": "Tampering",
+                "fr": "Sabotage",
+                "de": "Manipulation",
+                "es": "Manipulación"
+              }
+            },
+            {
+              "value": "sound",
+              "label": {
+                "en": "Sound",
+                "fr": "Son",
+                "de": "Geräusch",
+                "es": "Sonido"
+              }
+            },
+            {
+              "value": "doorbell",
+              "label": {
+                "en": "Doorbell pressed",
+                "fr": "Sonnette",
+                "de": "Türklingel gedrückt",
+                "es": "Timbre pulsado"
+              }
+            }
           ]
         }
       ],
       "variables": [
         {
-          "key": "target",
+          "key": "kind",
           "type": "string",
-          "label": { "en": "What moved", "fr": "Ce qui a bougé" }
+          "label": {
+            "en": "Detection (motion, person…)",
+            "fr": "Détection (motion, person…)",
+            "de": "Erkennung (motion, person…)",
+            "es": "Detección (motion, person…)"
+          }
+        },
+        {
+          "key": "rule",
+          "type": "string",
+          "label": {
+            "en": "Camera rule name",
+            "fr": "Nom de la règle de la caméra",
+            "de": "Name der Kameraregel",
+            "es": "Nombre de la regla de la cámara"
+          }
         }
       ]
     }
   ],
   "scene_actions": [
     {
-      "key": "identify_device",
-      "label": { "en": "Identify a device", "fr": "Identifier un appareil" },
-      "description": {
-        "en": "Make a device signal itself (the demo light blinks).",
-        "fr": "Fait se signaler un appareil (la lampe de démonstration clignote)."
+      "key": "goto_preset",
+      "label": {
+        "en": "Move a camera to a preset",
+        "fr": "Amener une caméra à une position mémorisée",
+        "de": "Kamera auf gespeicherte Position fahren",
+        "es": "Llevar una cámara a una posición predefinida"
       },
-      "timeout_seconds": 15,
+      "description": {
+        "en": "Turns a PTZ camera to one of its preset positions, given by its name as the camera app shows it.",
+        "fr": "Oriente une caméra motorisée vers l'une de ses positions mémorisées, donnée par son nom comme l'affiche l'application de la caméra.",
+        "de": "Richtet eine PTZ-Kamera auf eine ihrer gespeicherten Positionen aus, angegeben mit ihrem Namen wie in der Kamera-App.",
+        "es": "Orienta una cámara motorizada hacia una de sus posiciones predefinidas, indicada por su nombre tal como lo muestra la aplicación de la cámara."
+      },
+      "timeout_seconds": 20,
       "fields": [
         {
-          "key": "device",
+          "key": "camera",
           "type": "select",
           "source": "devices",
-          "label": { "en": "Device", "fr": "Appareil" },
+          "label": {
+            "en": "Camera",
+            "fr": "Caméra",
+            "de": "Kamera",
+            "es": "Cámara"
+          },
+          "required": true
+        },
+        {
+          "key": "preset",
+          "type": "string",
+          "label": {
+            "en": "Preset position",
+            "fr": "Position mémorisée",
+            "de": "Gespeicherte Position",
+            "es": "Posición predefinida"
+          },
+          "description": {
+            "en": "Its name, or its number.",
+            "fr": "Son nom, ou son numéro.",
+            "de": "Ihr Name oder ihre Nummer.",
+            "es": "Su nombre o su número."
+          },
+          "placeholder": {
+            "en": "e.g. Gate",
+            "fr": "ex. Portail",
+            "de": "z. B. Tor",
+            "es": "p. ej. Portón"
+          },
           "required": true
         }
       ],
       "outputs": [
         {
-          "key": "signalled",
-          "type": "boolean",
-          "label": { "en": "Device signalled", "fr": "Appareil signalé" }
+          "key": "preset",
+          "type": "string",
+          "label": {
+            "en": "Preset reached",
+            "fr": "Position atteinte",
+            "de": "Erreichte Position",
+            "es": "Posición alcanzada"
+          }
+        }
+      ]
+    },
+    {
+      "key": "move_camera",
+      "label": {
+        "en": "Move a camera",
+        "fr": "Faire tourner une caméra",
+        "de": "Kamera bewegen",
+        "es": "Mover una cámara"
+      },
+      "description": {
+        "en": "Turns or zooms a PTZ camera in one direction for a few seconds, then stops it.",
+        "fr": "Fait tourner ou zoomer une caméra motorisée dans une direction pendant quelques secondes, puis l'arrête.",
+        "de": "Dreht oder zoomt eine PTZ-Kamera einige Sekunden in eine Richtung und hält sie dann an.",
+        "es": "Gira o hace zoom con una cámara motorizada en una dirección durante unos segundos y luego la detiene."
+      },
+      "timeout_seconds": 30,
+      "fields": [
+        {
+          "key": "camera",
+          "type": "select",
+          "source": "devices",
+          "label": {
+            "en": "Camera",
+            "fr": "Caméra",
+            "de": "Kamera",
+            "es": "Cámara"
+          },
+          "required": true
+        },
+        {
+          "key": "direction",
+          "type": "select",
+          "label": {
+            "en": "Direction",
+            "fr": "Direction",
+            "de": "Richtung",
+            "es": "Dirección"
+          },
+          "required": true,
+          "options": [
+            {
+              "value": "left",
+              "label": {
+                "en": "Left",
+                "fr": "Gauche",
+                "de": "Links",
+                "es": "Izquierda"
+              }
+            },
+            {
+              "value": "right",
+              "label": {
+                "en": "Right",
+                "fr": "Droite",
+                "de": "Rechts",
+                "es": "Derecha"
+              }
+            },
+            {
+              "value": "up",
+              "label": {
+                "en": "Up",
+                "fr": "Haut",
+                "de": "Hoch",
+                "es": "Arriba"
+              }
+            },
+            {
+              "value": "down",
+              "label": {
+                "en": "Down",
+                "fr": "Bas",
+                "de": "Runter",
+                "es": "Abajo"
+              }
+            },
+            {
+              "value": "zoom_in",
+              "label": {
+                "en": "Zoom in",
+                "fr": "Zoomer",
+                "de": "Vergrößern",
+                "es": "Acercar"
+              }
+            },
+            {
+              "value": "zoom_out",
+              "label": {
+                "en": "Zoom out",
+                "fr": "Dézoomer",
+                "de": "Verkleinern",
+                "es": "Alejar"
+              }
+            }
+          ]
+        },
+        {
+          "key": "duration",
+          "type": "number",
+          "label": {
+            "en": "Duration (seconds)",
+            "fr": "Durée (secondes)",
+            "de": "Dauer (Sekunden)",
+            "es": "Duración (segundos)"
+          },
+          "required": false,
+          "default": 2,
+          "min": 1,
+          "max": 10
         }
       ]
     }
   ],
   "widgets": [
     {
-      "key": "demo_status",
-      "label": { "en": "Demo status", "fr": "État de la démo" },
-      "description": {
-        "en": "Live temperature and plug power, plug connection and observed location.",
-        "fr": "Température et puissance en direct, connexion de la prise, position observée."
+      "key": "camera",
+      "label": {
+        "en": "ONVIF camera",
+        "fr": "Caméra ONVIF",
+        "de": "ONVIF-Kamera",
+        "es": "Cámara ONVIF"
       },
-      "icon": "activity",
-      "action_timeout_seconds": 15
+      "description": {
+        "en": "The camera image, its detections, and one-tap buttons to turn it or recall presets.",
+        "fr": "L'image de la caméra, ses détections, et des boutons pour la tourner ou rappeler ses positions.",
+        "de": "Das Kamerabild, seine Erkennungen und Schaltflächen zum Drehen oder für gespeicherte Positionen.",
+        "es": "La imagen de la cámara, sus detecciones y botones para girarla o recuperar sus posiciones."
+      },
+      "icon": "video",
+      "action_timeout_seconds": 30,
+      "settings": [
+        {
+          "key": "camera",
+          "type": "select",
+          "source": "devices",
+          "label": {
+            "en": "Camera",
+            "fr": "Caméra",
+            "de": "Kamera",
+            "es": "Cámara"
+          },
+          "required": true
+        },
+        {
+          "key": "controls",
+          "type": "select",
+          "label": {
+            "en": "Buttons",
+            "fr": "Boutons",
+            "de": "Schaltflächen",
+            "es": "Botones"
+          },
+          "required": false,
+          "default": "directions",
+          "options": [
+            {
+              "value": "directions",
+              "label": {
+                "en": "Left, up, down, right",
+                "fr": "Gauche, haut, bas, droite",
+                "de": "Links, hoch, runter, rechts",
+                "es": "Izquierda, arriba, abajo, derecha"
+              }
+            },
+            {
+              "value": "zoom_presets",
+              "label": {
+                "en": "Zoom and two presets",
+                "fr": "Zoom et deux positions",
+                "de": "Zoom und zwei Positionen",
+                "es": "Zoom y dos posiciones"
+              }
+            },
+            {
+              "value": "presets",
+              "label": {
+                "en": "Four presets",
+                "fr": "Quatre positions",
+                "de": "Vier Positionen",
+                "es": "Cuatro posiciones"
+              }
+            },
+            {
+              "value": "none",
+              "label": {
+                "en": "No button",
+                "fr": "Aucun bouton",
+                "de": "Keine Schaltfläche",
+                "es": "Ningún botón"
+              }
+            }
+          ]
+        },
+        {
+          "key": "presets",
+          "type": "string",
+          "label": {
+            "en": "Preset buttons",
+            "fr": "Boutons de positions",
+            "de": "Positions-Schaltflächen",
+            "es": "Botones de posiciones"
+          },
+          "description": {
+            "en": "Names of the presets to show, separated by commas. Empty: the first ones.",
+            "fr": "Noms des positions à afficher, séparés par des virgules. Vide : les premières.",
+            "de": "Namen der anzuzeigenden Positionen, durch Kommas getrennt. Leer: die ersten.",
+            "es": "Nombres de las posiciones a mostrar, separados por comas. Vacío: las primeras."
+          },
+          "placeholder": {
+            "en": "e.g. Gate, Garden",
+            "fr": "ex. Portail, Jardin",
+            "de": "z. B. Tor, Garten",
+            "es": "p. ej. Portón, Jardín"
+          },
+          "required": false
+        }
+      ]
     }
   ]
 }
