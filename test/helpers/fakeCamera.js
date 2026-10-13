@@ -215,6 +215,8 @@ export class FakeCamera {
     this.online = true;
     // Notifications sent as `Initialized` when a subscription starts.
     this.initialState = [];
+    // Operation → how many of its next requests are lost.
+    this.failing = {};
     this.calls = [];
     this.moves = [];
     this.queue = [];
@@ -262,6 +264,12 @@ export class FakeCamera {
     }
     const request = find(root, 'Body')?.children[0];
     const operation = request?.name ?? '';
+    if (this.failing[operation] > 0) {
+      // A request lost on the way (Wi-Fi), `failing[operation]` times.
+      this.failing[operation] -= 1;
+      this.calls.push({ operation, path, lost: true });
+      throw new HttpError('Request timed out', { code: 'ETIMEDOUT' });
+    }
     const auth = this.checkAuth(root);
     this.calls.push({ operation, path, auth, request, headers: find(root, 'Header') });
     if (operation !== 'GetSystemDateAndTime' && auth !== 'ok') {

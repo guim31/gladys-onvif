@@ -51,8 +51,10 @@ export function registerHandlers(gladys, options = {}) {
         await hub.resync(config);
         return;
       }
-      started = true;
       await hub.start(config);
+      // Only once it went through: a start that failed (Gladys restarting)
+      // is run again at the next connection.
+      started = true;
     } catch (err) {
       logger.error('Initialization failed', err);
       await gladys.setConnectionStatus(false, INIT_FAILED).catch(() => {});

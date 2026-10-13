@@ -66,6 +66,7 @@ export const HUB_TIMINGS = {
   // An image younger than this answers a request for a fresh one.
   freshImageMs: 2000,
   pulseMs: PULSE_MS,
+  triggerCooldownMs: 5000,
 };
 
 // Speed of a continuous move and size of a relative step, in the ONVIF
@@ -74,6 +75,10 @@ const MOVE_SPEED = 0.5;
 const RELATIVE_STEP = 0.1;
 const CONNECT_CONCURRENCY = 4;
 const MAX_MOVE_SECONDS = 10;
+// A stop that failed is tried again after this long, this many times.
+const STOP_RETRY_MS = 1000;
+const MAX_STOP_TRIES = 5;
+const SHUTDOWN_STOP_MS = 3000;
 // Detections that deserve a fresh image.
 const IMAGE_KINDS = [
   'motion',
@@ -87,15 +92,15 @@ const IMAGE_KINDS = [
 
 const sleep = (ms, signal) =>
   new Promise((resolve) => {
-    const timer = setTimeout(resolve, ms);
-    signal?.addEventListener(
-      'abort',
-      () => {
-        clearTimeout(timer);
-        resolve();
-      },
-      { once: true },
-    );
+    const onAbort = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', onAbort, { once: true });
   });
 
 const pixels = (profile) => profile.width * profile.height;
@@ -188,7 +193,10 @@ export class OnvifHub {
 
   async start(config) {
     this.config = config;
-    await this.restore();
+    if (!this.restored) {
+      await this.restore();
+      this.restored = true;
+    }
     await this.publishDevices();
     await this.discover();
     await this.publishDevices();
@@ -221,7 +229,7 @@ export class OnvifHub {
       addresses(previous.hosts) !== addresses(config.hosts) ||
       previous.accountsKey !== config.accountsKey
     ) {
-      await this.discover();
+      await this.discover({ again: true });
       await Promise.all([...this.cameras.values()].map((camera) => this.stopEvents(camera)));
       this.startAllEvents();
     }
@@ -268,6 +276,12 @@ export class OnvifHub {
       unsubscribes.push(this.stopEvents(camera));
       for (const source of camera.sources) {
         clearTimeout(source.watchdog);
+        if (source.moving !== null) {
+          // Stopping mid-move: the watchdog will not run any more, stop now.
+          const profile = source.ptzProfile ?? source.mainProfile;
+          const stopping = this.ptz(source, () => camera.client.stop(profile));
+          unsubscribes.push(Promise.race([stopping.catch(() => {}), sleep(SHUTDOWN_STOP_MS)]));
+        }
         clearTimeout(source.imageTimer);
         for (const timer of source.pulses.values()) {
           clearTimeout(timer);
@@ -332,7 +346,7 @@ export class OnvifHub {
           mainProfile: source.mainProfile,
           subProfile: source.subProfile,
           ptzProfile: source.ptzProfile,
-          snapshotUri: source.snapshotUri,
+          snapshotUri: hasCredentials(source.snapshotUri) ? null : source.snapshotUri,
           ptz: source.ptz,
           presets: source.presets,
         })),
@@ -430,6 +444,8 @@ export class OnvifHub {
       // Detection state: kind → Map(rule → boolean).
       active: new Map(),
       pulses: new Map(),
+      // Detector → time of its last scene event.
+      lastTriggers: new Map(),
     };
   }
 
@@ -448,10 +464,21 @@ export class OnvifHub {
    * @param {boolean} [options.force] try again the accounts a camera refused
    */
   discover(options = {}) {
-    this.discovering ??= this.runDiscovery(options).finally(() => {
-      this.discovering = null;
-    });
-    return this.discovering;
+    if (this.discovering && !options.force && !options.again) {
+      return this.discovering;
+    }
+    // A search asked by the user, or new settings, run after the one under
+    // way: never answered by an older, unforced run.
+    const run = (this.discovering ?? Promise.resolve())
+      .catch(() => {})
+      .then(() => this.runDiscovery(options))
+      .finally(() => {
+        if (this.discovering === run) {
+          this.discovering = null;
+        }
+      });
+    this.discovering = run;
+    return run;
   }
 
   async runDiscovery({ force = false } = {}) {
@@ -520,6 +547,12 @@ export class OnvifHub {
       if (camera.reachable !== false) {
         camera.reachable = false;
         camera.failures = this.timings.unreachableAfter;
+      }
+    }
+    // A displaced camera nobody added to Gladys is forgotten.
+    for (const camera of [...this.cameras.values()]) {
+      if (camera.displaced && !camera.sources.some((source) => this.isCreated(camera, source))) {
+        this.cameras.delete(camera.uid);
       }
     }
     await this.save();
@@ -596,8 +629,17 @@ export class OnvifHub {
     }
     this.refused.delete(key);
 
-    const mac = await client.getMacAddress().catch(() => null);
+    // A timeout here must not change the identity of the camera.
+    const mac = await client.getMacAddress().catch((err) => {
+      if (err.kind === 'network') {
+        throw err;
+      }
+      return null;
+    });
+    const sameCamera =
+      !normalizeMac(mac) && known?.info?.serial && known.info.serial === info.serial ? known : null;
     const uid =
+      sameCamera?.uid ??
       uniqueId({ mac, serial: info.serial }) ??
       `ip-${address.host.replace(/[^a-z0-9]/gi, '-')}-${address.port}`;
     const { services } = await client.getServices();
@@ -765,6 +807,10 @@ export class OnvifHub {
     if (found.camera.displaced) {
       // Its address now leads to another camera: never act on that one.
       throw new Error(`${this.label(found.camera)} is no longer at ${found.camera.host}`);
+    }
+    if (found.camera.authError) {
+      // Every refused request brings the camera closer to locking the account.
+      throw new Error(`${this.label(found.camera)} refuses its account: check it, then search`);
     }
     return found;
   }
@@ -945,11 +991,21 @@ export class OnvifHub {
 
   // --- Images ------------------------------------------------------------------
 
-  /** The periodic images, for the created devices of the cameras answering. */
-  async refreshAllImages() {
+  /**
+   * The periodic images, for the created devices of the cameras answering.
+   * A round still running (slow cameras) makes the next one wait its turn.
+   */
+  refreshAllImages() {
+    this.imageRound ??= this.runImageRound().finally(() => {
+      this.imageRound = null;
+    });
+    return this.imageRound;
+  }
+
+  async runImageRound() {
     const jobs = [];
     for (const camera of this.cameras.values()) {
-      if (camera.reachable !== true) {
+      if (camera.reachable !== true || camera.authError) {
         continue;
       }
       for (const source of camera.sources) {
@@ -986,6 +1042,9 @@ export class OnvifHub {
     if (camera.displaced) {
       throw new Error(`${this.label(camera)} is no longer at ${camera.host}`);
     }
+    if (camera.authError) {
+      throw new Error(`${this.label(camera)} refuses its account`);
+    }
     let jpeg = null;
     if (source.snapshotUri && source.snapshotFailures < 3) {
       try {
@@ -997,9 +1056,8 @@ export class OnvifHub {
           await this.failed(camera);
           throw err;
         }
-        if (err.kind === 'auth') {
-          await this.authFailed(camera);
-        }
+        // A refused snapshot counts as a failure of the snapshot address
+        // only: after three, the RTSP stream takes over.
         source.snapshotFailures += 1;
         logger.warn(`Snapshot of ${this.label(camera)} failed: ${err.message}`);
       }
@@ -1141,12 +1199,17 @@ export class OnvifHub {
     }
     const profile = source.ptzProfile ?? source.mainProfile;
     return this.ptz(source, async () => {
-      clearTimeout(source.watchdog);
-      source.watchdog = null;
       if (move === MOVES.STOP) {
         if (source.moving !== null) {
+          this.clearWatchdog(source);
+          try {
+            await this.ptzCall(camera, () => camera.client.stop(profile));
+          } catch (err) {
+            // The camera may still be moving: the watchdog tries again.
+            this.armWatchdog(camera, source, profile, STOP_RETRY_MS);
+            throw err;
+          }
           source.moving = null;
-          await this.ptzCall(camera, () => camera.client.stop(profile));
           this.scheduleImage(camera, source, this.timings.imageAfterMoveMs);
         }
         return;
@@ -1154,6 +1217,7 @@ export class OnvifHub {
       const vector = moveVector(move);
       const axis = axisOf(move);
       if (!source.ptz.continuous?.[axis]) {
+        // One step; a continuous move under way keeps its watchdog.
         await this.ptzCall(camera, () =>
           camera.client.relativeMove(profile, scaleVector(vector, RELATIVE_STEP)),
         );
@@ -1164,40 +1228,58 @@ export class OnvifHub {
         // Another direction: stop the previous move first.
         await this.ptzCall(camera, () => camera.client.stop(profile)).catch(() => {});
       }
-      source.moving = move;
-      try {
-        await this.ptzCall(camera, () =>
-          camera.client.continuousMove(profile, scaleVector(vector, MOVE_SPEED)),
-        );
-      } catch (err) {
-        source.moving = null;
-        throw err;
-      }
       const limit = Math.min(durationMs ?? this.config.moveMs, MAX_MOVE_SECONDS * 1000);
-      source.watchdog = setTimeout(() => {
-        source.watchdog = null;
-        this.track(this.watchdogStop(camera, source, profile));
-      }, limit);
+      // Armed before the request: whether it failed or not, the camera may
+      // be moving, and a stop to an idle camera does no harm.
+      source.moving = move;
+      this.armWatchdog(camera, source, profile, limit);
+      await this.ptzCall(camera, () =>
+        camera.client.continuousMove(profile, scaleVector(vector, MOVE_SPEED)),
+      );
     });
   }
 
-  /** The watchdog: no stop came, stop now (tried twice). */
+  clearWatchdog(source) {
+    clearTimeout(source.watchdog);
+    source.watchdog = null;
+  }
+
+  armWatchdog(camera, source, profile, delayMs) {
+    this.clearWatchdog(source);
+    if (this.stopped) {
+      return;
+    }
+    source.watchdog = setTimeout(() => {
+      source.watchdog = null;
+      this.track(this.watchdogStop(camera, source, profile));
+    }, delayMs);
+  }
+
+  /**
+   * The watchdog: no stop came, stop now. A failed stop is tried again a few
+   * times: a camera must never keep turning against its mechanical stop.
+   */
   watchdogStop(camera, source, profile) {
     return this.ptz(source, async () => {
       if (source.moving === null || source.watchdog) {
         return;
       }
-      source.moving = null;
       try {
         await camera.client.stop(profile);
+        source.moving = null;
+        source.stopFailures = 0;
+        this.scheduleImage(camera, source, this.timings.imageAfterMoveMs);
       } catch (err) {
+        source.stopFailures = (source.stopFailures ?? 0) + 1;
+        if (source.stopFailures >= MAX_STOP_TRIES) {
+          logger.error(`Stop of ${this.label(camera)} failed: ${err.message}`);
+          source.moving = null;
+          source.stopFailures = 0;
+          return;
+        }
         logger.warn(`Stop of ${this.label(camera)} failed, trying again: ${err.message}`);
-        await sleep(500);
-        await camera.client.stop(profile).catch((again) => {
-          logger.error(`Stop of ${this.label(camera)} failed: ${again.message}`);
-        });
+        this.armWatchdog(camera, source, profile, STOP_RETRY_MS);
       }
-      this.scheduleImage(camera, source, this.timings.imageAfterMoveMs);
     });
   }
 
@@ -1235,10 +1317,10 @@ export class OnvifHub {
     }
     const profile = source.ptzProfile ?? source.mainProfile;
     await this.ptz(source, async () => {
-      clearTimeout(source.watchdog);
-      source.watchdog = null;
-      source.moving = null;
+      // A failed request leaves a move under way with its watchdog.
       await this.ptzCall(camera, () => camera.client.gotoPreset(profile, preset.token));
+      this.clearWatchdog(source);
+      source.moving = null;
     });
     this.scheduleImage(camera, source, this.timings.imageAfterPresetMs);
     return preset;
@@ -1308,6 +1390,11 @@ export class OnvifHub {
     const client = camera.client;
     const timings = this.timings;
     while (!signal.aborted && !this.stopped) {
+      if (camera.authError) {
+        // No more refused requests until a search finds the account again.
+        await sleep(timings.eventRetryMs, signal);
+        continue;
+      }
       let subscription = null;
       try {
         subscription = await client.createPullPoint(timings.subscriptionSeconds);
@@ -1424,7 +1511,7 @@ export class OnvifHub {
       );
       this.requestWidgetRefresh();
     }
-    if (after && !initial && this.isCreated(camera, source)) {
+    if (after && !initial && this.isCreated(camera, source) && this.triggerDue(source, detection)) {
       this.track(
         this.gladys.publishSceneEvent(TRIGGER, {
           camera: this.ids(camera, source).device,
@@ -1436,6 +1523,22 @@ export class OnvifHub {
         this.scheduleImage(camera, source, 0);
       }
     }
+  }
+
+  /**
+   * One scene event per detector every few seconds at most: a detection
+   * flapping on several cameras would reach the core's 300 events a minute,
+   * and the events past it (a doorbell…) would be lost.
+   */
+  triggerDue(source, detection) {
+    const key = `${detection.kind}|${detection.rule}`;
+    const now = Date.now();
+    const last = source.lastTriggers.get(key);
+    if (last !== undefined && now - last < this.timings.triggerCooldownMs) {
+      return false;
+    }
+    source.lastTriggers.set(key, now);
+    return true;
   }
 
   // --- Report ----------------------------------------------------------------------
@@ -1457,6 +1560,21 @@ export class OnvifHub {
         sources: camera.sources.length,
       })),
     };
+  }
+}
+
+/** Whether an address carries credentials (user:pass@, or in its query string). */
+export function hasCredentials(address) {
+  if (!address) {
+    return false;
+  }
+  try {
+    const url = new URL(address);
+    return (
+      Boolean(url.username || url.password) || /user|usr|pass|pwd|auth|token|key/i.test(url.search)
+    );
+  } catch {
+    return true;
   }
 }
 

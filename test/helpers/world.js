@@ -23,6 +23,7 @@ export const FAST_EVENTS = {
   emptyPullDelayMs: 10,
   eventRetryMs: 50,
   pulseMs: 80,
+  triggerCooldownMs: 0,
   imageAfterMoveMs: 10,
   imageAfterPresetMs: 10,
   minImageSpacingMs: 0,
