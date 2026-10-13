@@ -141,9 +141,12 @@ test('Tapo: pan and tilt only, reference parameters echoed in the pulls', async 
 test('addresses the camera gives are pointed at the host that answered', () => {
   const client = new OnvifCamera({ host: '192.0.2.30', port: 8080 });
   client.reportedPort = 80;
-  assert.equal(client.fixUrl('http://10.0.0.5/onvif/Media'), 'http://192.0.2.30:8080/onvif/Media');
   assert.equal(
-    client.fixUrl('http://10.0.0.5:8999/snap.jpg?x=1'),
+    client.fixUrl('http://198.51.100.5/onvif/Media'),
+    'http://192.0.2.30:8080/onvif/Media',
+  );
+  assert.equal(
+    client.fixUrl('http://198.51.100.5:8999/snap.jpg?x=1'),
     'http://192.0.2.30:8999/snap.jpg?x=1',
   );
   assert.equal(client.fixUrl('garbage'), null);

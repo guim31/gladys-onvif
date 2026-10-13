@@ -5,11 +5,13 @@ contributors.
 
 ## What this is
 
-A Gladys Assistant **external integration**: a Node.js service (Node 22+, ESM,
-no build step) that runs in its own sandboxed Docker container and talks to
-Gladys through
+A Gladys Assistant **external integration** for ONVIF IP cameras: a Node.js
+service (Node 22+, ESM, no build step) that runs in its own sandboxed Docker
+container and talks to Gladys through
 [`@gladysassistant/integration-sdk`](https://github.com/GladysAssistant/integration-sdk-js),
-its only runtime dependency. It started from the official JavaScript template.
+its only runtime dependency (the ONVIF client is written here, and the image
+adds the `ffmpeg` Alpine package). It started from the official JavaScript
+template.
 
 ## Commands
 
@@ -31,16 +33,27 @@ pushing.
 ## Architecture
 
 ```
-index.js                          SDK wiring only: handlers registered before connect()
-src/devices/index.js              registry of the device blueprints + dispatch helpers
-src/devices/<type>.js             one device type per file (buildDevice, onPoll, onSetValue...)
-src/scenes.js                     scene action handlers (manifest `scene_actions`)
-src/widgets.js                    dashboard widget handlers (manifest `widgets`)
+index.js                          SDK wiring only (src/app.js), graceful shutdown
+src/app.js                        registers every SDK handler, waits for the first start
+src/hub.js                        cameras, devices, images, PTZ queue + watchdog, event loops, trigger
+src/devices.js                    Gladys devices and features, names, preset numbers
+src/discovery.js                  WS-Discovery probe (mediated scan) and its answers
+src/image.js                      ffmpeg: fit an image under 150 KB, grab an RTSP frame
 src/config.js                     DEFAULT_CONFIG (mirrors the manifest defaults) + normalization
-src/weather.js                    example driver (Open-Meteo)
-gladys-assistant-integration.json manifest: name, config_schema, actions, image...
-docs/en.md, docs/fr.md            user documentation, re-hosted by Gladys (mandatory)
-test/                             node --test, against the SDK's fake Gladys (integration-sdk/testing)
+src/scenes.js                     scene actions goto_preset, move_camera
+src/widgets.js                    dashboard widget `camera` (+ its images)
+src/texts.js                      connection status, search report (four languages)
+src/store.js                      /data/onvif-state.json (cameras known, no password)
+src/onvif/xml.js                  XML reader by local names (no DTD), serializer
+src/onvif/http.js, digest.js      HTTP with time/size bounds, Digest and Basic
+src/onvif/soap.js                 SOAP 1.2, WS-Security digest, faults, typed errors
+src/onvif/camera.js               device, media, PTZ, event operations
+src/onvif/events.js               event topics → detection kinds
+gladys-assistant-integration.json manifest
+docs/{en,fr,de,es}.md             user documentation, re-hosted by Gladys (same sections)
+test/helpers/fakeCamera.js        simulated cameras (happytime recording, hikvision, tapo)
+test/helpers/world.js             fake Gladys + fake cameras + temporary /data
+test/fixtures/onvif/              recorded SOAP answers, real event payloads
 .github/scripts/release.mjs       release helpers (manifest bump, changelog), tested in test/
 ```
 
@@ -70,8 +83,10 @@ test/                             node --test, against the SDK's fake Gladys (in
   `type: "provider"`: 5.1.0). `test/manifest.test.js` ties the manifest to the
   code (defaults, action, scene and widget handlers): change both sides
   together.
-- **User-facing text** is bilingual (English and French): action messages,
-  manifest texts, and `docs/en.md` / `docs/fr.md`, kept in sync.
+- **User-facing text** exists in English, French, German and Spanish:
+  action messages, manifest texts, widget texts, feature names, and
+  `docs/en.md`, `docs/fr.md`, `docs/de.md`, `docs/es.md`, kept in sync
+  (`test/i18n.test.js`).
 - **Style.** Prettier formats, ESLint catches mistakes. Comments explain why,
   in English. Tests never touch the network.
 
@@ -213,3 +228,47 @@ long, et sur un « Sie »/« Ihr… » de politesse en allemand. Le store exige 
 - Docs `en`, `fr`, `de`, `es` avec les mêmes sections.
 - Chauffe, ouverture, sécurité : ne rien rendre pilotable « comme un thermostat » ou par un assistant
   vocal quand une erreur serait dangereuse (leçon d'OctoPrint).
+
+## Intégration ONVIF : API et pièges
+
+- **Découverte** : WS-Discovery est en multicast (239.255.255.250:3702), le cœur 5.1+ n'émet qu'en
+  **broadcast** (`udp-active-broadcast`, 255.255.255.255 et broadcast dirigé), charge **512 octets au
+  plus**. La sonde part donc sans déclaration XML ni filtre `Types` (487 octets) et les réponses sont
+  filtrées ici (`NetworkVideoTransmitter` ou scopes `onvif://`). Les piles gSOAP (et le serveur
+  Happytime, vérifié en Docker) répondent au broadcast ; une caméra qui n'écoute que le groupe multicast
+  ne répond pas : adresse saisie.
+- **WS-Security** : `Created` en « Zulu » sans millisecondes (`2024-08-17T12:30:45Z`, Hikvision refuse
+  `+00:00`), et décalé de l'horloge de la caméra (`GetSystemDateAndTime` sans authentification, refait à
+  chaque contrôle de santé) : beaucoup de caméras refusent un jeton à plus de quelques minutes.
+- **Verrouillage des comptes** : une caméra bloque un compte après quelques mauvais mots de passe. Un
+  compte refusé par une adresse n'y est plus envoyé tant que l'empreinte des comptes ne change pas, sauf
+  par l'action « Rechercher les caméras » (`force`).
+- **Identité** : MAC de la **dernière** interface active (certaines caméras listent d'abord une interface
+  factice au MAC identique sur tous les exemplaires, choix de Home Assistant), sinon numéro de série.
+  Appareil = `<uid>_<jeton de source vidéo>`. Le serveur Happytime tire un MAC au hasard à chaque
+  démarrage : ne pas s'en étonner en Docker.
+- **Une autre caméra à la même adresse** (DHCP, remplacement) : le contrôle de santé ne vérifie pas
+  l'identité, donc l'ancienne caméra passe « déplacée » (`displaced`) : ni image, ni commande, ni
+  événements jusqu'à ce qu'une recherche la retrouve.
+- **Adresses données par la caméra** (XAddr, snapshot, flux) : souvent fausses derrière un NAT ou mal
+  réglées ; l'hôte est remplacé par celui qui a répondu, le port aussi quand c'était le port annoncé du
+  service device (`fixUrl`). Le port RTSP est gardé.
+- **Images** : le cœur borne la **chaîne** `image/jpg;base64,…` à 150 × 1024 caractères, soit ~112 Ko
+  de JPEG ; ffmpeg réduit par paliers (1280 px puis moins). 12 images/min par caméra : espacement de
+  5,1 s. Sans `GetSnapshotUri`, une image du flux RTSP du plus petit profil, identifiants dans l'URL
+  (jamais journalisée, stderr de ffmpeg expurgé).
+- **PTZ** : contrat `camera/move` (1-6, 0 = stop, jamais listé) et `camera/preset` (`supported_options`
+  à valeurs entières). `ContinuousMove` borné par un chien de garde (`move_duration`, 1 s par défaut :
+  un bouton de widget, une scène ou un appui dont le relâchement est perdu bougent de cette durée) ;
+  `RelativeMove` si la caméra n'a pas de vitesse continue. Les commandes d'une source passent dans une
+  file. Numéros de positions tirés du jeton seul (jeton numérique, sinon chiffres finaux, sinon hachage
+  ≥ 100000) : stables sans stockage.
+- **Événements** : PullPoint en long polling (`PullMessages` 20 s), `Renew` avant expiration, nouvel
+  abonnement après erreur (60 s), `Unsubscribe` à l'arrêt ; certaines caméras exigent l'écho des
+  `ReferenceParameters` en en-têtes WS-Addressing (Tapo, Axis). Hikvision écrit
+  `2024-08-17-12:30:45Z`. Les notifications `Initialized` donnent l'état sans déclencher de scène. Les
+  sujets suivent onvif-parsers ; `LineDetector/Crossed` est une impulsion (retour à 0 après 5 s).
+- **`camera/enabled`** (mode privé, 5.2.0) n'est pas publié : le cœur considère la caméra toujours
+  active. **`doorbell/ring`** n'existe qu'à partir de 5.2.0 : la sonnette reste un déclencheur.
+- Tests Docker de référence : serveur ONVIF Happytime (binaire de la suite de tests d'agsh/onvif, usage
+  non commercial, hors dépôt), MediaMTX pour le RTSP, `test/helpers/fakeCamera.js` servi en HTTP.

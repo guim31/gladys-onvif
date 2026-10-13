@@ -9,8 +9,8 @@ import {
 } from '../src/config.js';
 
 test('addresses: IP, name, port, full device service address', () => {
-  assert.deepEqual(parseAddress('192.168.001.020'), {
-    host: '192.168.1.20',
+  assert.deepEqual(parseAddress('192.0.002.020'), {
+    host: '192.0.2.20',
     port: 80,
     path: '/onvif/device_service',
   });

@@ -564,7 +564,7 @@
           "description": {
             "en": "Its name, or its number.",
             "fr": "Son nom, ou son numéro.",
-            "de": "Ihr Name oder ihre Nummer.",
+            "de": "Name oder Nummer der Position.",
             "es": "Su nombre o su número."
           },
           "placeholder": {

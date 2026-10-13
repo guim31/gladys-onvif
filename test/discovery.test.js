@@ -57,7 +57,7 @@ test('the recorded answer of the Happytime server is a camera', () => {
 });
 
 test('the address it came from wins over the one it announces; printers are left out', () => {
-  const camera = recorded.replaceAll('{{host}}', '10.9.9.9');
+  const camera = recorded.replaceAll('{{host}}', '198.51.100.9');
   const printer = recorded
     .replace('dn:NetworkVideoTransmitter tds:Device', 'wsdp:Device wprt:PrintDeviceType')
     .replace(/onvif:\/\/www\.onvif\.org\/[^ <]+/g, '');
