@@ -10,6 +10,15 @@ the notes of the version's GitHub Release.
 
 ## [Unreleased]
 
+### Changed
+
+- Quieter logs: a failure tried again and again (stream without image,
+  refused snapshot, discovery through Gladys unavailable, states not taken,
+  events interrupted, stop of a movement retried, state file not writable) now
+  writes one line when it starts and one when it ends, instead of one per
+  attempt; a new kind of detection reported by a camera is no longer logged at
+  the info level. `LOG_LEVEL=debug` still shows every attempt.
+
 ## [1.0.0] - 2026-10-13
 
 ### Added

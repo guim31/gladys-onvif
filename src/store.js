@@ -20,6 +20,7 @@ export class Store {
     this.path = join(directory, FILE_NAME);
     this.pending = null;
     this.writing = null;
+    this.writeFailing = false;
   }
 
   async load() {
@@ -48,8 +49,18 @@ export class Store {
           const temporary = `${this.path}.tmp`;
           await writeFile(temporary, JSON.stringify(snapshot));
           await rename(temporary, this.path);
+          if (this.writeFailing) {
+            this.writeFailing = false;
+            logger.info(`${this.path} is written again`);
+          }
         } catch (err) {
-          logger.warn(`Cannot write ${this.path}: ${err.message}`);
+          // Saved at every search: one line until a write works.
+          if (this.writeFailing) {
+            logger.debug(`Cannot write ${this.path}: ${err.message}`);
+          } else {
+            this.writeFailing = true;
+            logger.warn(`Cannot write ${this.path}: ${err.message}`);
+          }
         }
       });
       this.writing = this.pending;

@@ -66,7 +66,7 @@ const NS =
 const soapEnvelope = (body) =>
   `<?xml version="1.0" encoding="UTF-8"?><env:Envelope ${NS}><env:Body>${body}</env:Body></env:Envelope>`;
 
-const soapFault = (reason, subcode) =>
+export const soapFault = (reason, subcode) =>
   soapEnvelope(
     '<env:Fault><env:Code><env:Value>env:Sender</env:Value>' +
       `<env:Subcode><env:Value>ter:${subcode}</env:Value></env:Subcode></env:Code>` +

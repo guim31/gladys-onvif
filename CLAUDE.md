@@ -67,6 +67,10 @@ test/fixtures/onvif/              recorded SOAP answers, real event payloads
   manifest `config_schema`, `actions`, widget and scene keys, feature keys.
 - **The container rootfs is read-only.** Write only under `/data`, the one
   writable volume. Never log tokens, passwords or API keys.
+- **Logs.** `info` is the life of the integration only (start, camera found,
+  lost, back, a refused account); anything per image, state, event or search
+  is `debug` (`LOG_LEVEL=debug`). A failure tried again and again logs one line,
+  then one when it ends (`test/logs.test.js`).
 - **Versions belong to the Release workflow** (Actions → Release). Never edit
   `version` in `package.json` or in the manifest, nor the `docker_image` tag,
   by hand — except on the README's hand-pushed tag path, which bumps all three
@@ -124,6 +128,9 @@ code de ce dépôt. Compléter ce fichier quand un nouveau piège est découvert
   15000, 30000, 60000). Le template publie `poll_frequency: 300` sans `should_poll` : c'est faux,
   le cœur répond 400 à la découverte. Pour une cadence hors liste, publier `should_poll: false` et
   pousser les états depuis le conteneur, en gardant un `onPoll` de repli.
+  Piège GladysAssistant/Gladys#3198 (correctif #3199) : le cœur 5.2.0 ne sonde jamais un
+  appareil créé sans `should_poll`, même après correction. Ici les images et la santé suivent
+  les minuteurs du hub, jamais `onPoll` (test « container timer » de `test/hub.test.js`).
 - **`min` et `max` sont NOT NULL** dans `t_device_feature`, y compris pour `text/text` : sans eux,
   « Ajouter à Gladys » échoue en HTTP 422. Mettre 0/0, comme Zigbee2MQTT.
 - Un état publié sur une fonctionnalité **pas encore ajoutée** dans Gladys reçoit un 200 puis est
