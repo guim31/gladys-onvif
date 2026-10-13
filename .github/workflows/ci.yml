@@ -12,9 +12,10 @@
 # (amd64 only, never pushed), so a broken Dockerfile shows up here rather than
 # in a release.
 #
-# The store validator (`npx github:GladysAssistant/integration-store .`) is not
-# a gate here: it also checks that the manifest's `docker_image` exists on its
-# registry, which is false until the first release.
+# The store validator (`npx github:GladysAssistant/integration-store`) runs too,
+# with the exact admission rules of the store indexer (schema, code rules, docs
+# in every language, cover, categories), but with `--skip-image-check`: the
+# image tag of a pull request is only pushed by the release.
 # -----------------------------------------------------------------------------
 name: CI
 
@@ -81,3 +82,21 @@ jobs:
           context: .
           platforms: linux/amd64
           push: false
+
+  store:
+    runs-on: ubuntu-latest
+    name: Store checks (manifest)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false # no git push here
+
+      # The validator requires Node 24.
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Store admission checks
+        run: npx -y github:GladysAssistant/integration-store --skip-image-check .
