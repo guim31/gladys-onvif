@@ -1,61 +1,166 @@
-# Demo Devices Template
+# ONVIF
 
-This is the user documentation of the integration. Gladys re-hosts this file
-and shows a permanent **Documentation** link to it in the Configuration screen
-(in the user's language, with English as the fallback) — it is when
-configuring that the user needs it most. Keep the short onboarding hints in
-the `section` blocks of the manifest `config_schema`; put the long
-step-by-step (screenshots, troubleshooting…) here.
+Bring your **ONVIF IP cameras** into Gladys, over your local network: Hikvision,
+Dahua, Amcrest, Reolink, TP-Link Tapo and VIGI, Axis, Foscam, Annke, Uniview,
+and most network video recorders. Gladys finds them, shows their image without
+you typing any stream address, turns and zooms the motorized ones, recalls
+their preset positions, and follows what they detect (motion, person, vehicle,
+animal, line crossing, intrusion, tampering), with a dashboard widget, a scene
+trigger and two scene actions. No cloud: Gladys talks to each camera directly.
 
-## What you get
+> **Developed without the hardware: feedback welcome.** This integration was
+> built and tested against the Happytime ONVIF server (a complete software
+> camera), against simulated cameras answering like Hikvision and TP-Link Tapo
+> models, and against real event messages recorded by the onvif-parsers
+> project, not against a real camera. If something does not work as described,
+> please say so on the [Gladys forum](https://community.gladysassistant.com) or
+> in the [issues](https://github.com/guim31/gladys-onvif/issues).
 
-Six demo devices show up after installation: a weather station (real data
-from Open-Meteo), a switch, a dimmable light, a smart plug with power
-metering, a motion sensor and a camera.
+## What you need
 
-## Configuration
+- Gladys Assistant 5.1.0 or later.
+- Cameras on the same network as Gladys, with **ONVIF turned on**, and the user
+  name and password of an ONVIF account. Where to find it:
+  - **TP-Link Tapo**: in the Tapo app, camera settings, **Advanced settings** →
+    **Camera account**: create a user name and a password (they are not your
+    TP-Link account). ONVIF answers on port **2020**.
+  - **Reolink**: ONVIF is on by default on most models (port **8000**); on
+    recent firmware, check **Settings** → **Network** → **Advanced** → **Server
+    settings**. Use a camera user.
+  - **Hikvision**: in the web page of the camera, **Configuration** →
+    **Network** → **Advanced Settings** → **Integration Protocol**: turn on
+    **Open Network Video Interface** and add an ONVIF user there (it is a
+    separate list of users).
+  - **Dahua, Amcrest**: **Setup** → **Network** → **Access Platform** (or
+    **ONVIF**): turn it on; the camera users work.
+  - Other brands: look for "ONVIF" in the network settings.
+- For the detections: turn the detections on in the camera itself (motion,
+  person, line crossing…). Some brands only report them over ONVIF when they
+  are linked to an action, such as "Notify surveillance center" on Hikvision.
 
-1. Open the **Configuration** tab of the integration.
-2. Set the **latitude** and **longitude** the demo weather station should
-   observe (they default to Paris), and pick your temperature unit.
-   The **refresh interval** sets how often the weather station and the
-   plug's power are read: every 5 minutes by default, every minute at most.
-3. Save: the devices appear in the **Discovery** tab, ready to be added.
+## Set up
 
-The **Prefer the local connection** toggle drives the demo plug: it reports
-the channel it actually uses as a badge (local or cloud), with an orange dot
-when it runs degraded (local refused, cloud fallback).
+1. Install the integration from the Gladys catalog.
+2. Open its **Configuration**:
+   - **User name** and **Password**: the ONVIF account of your cameras.
+   - **Camera addresses**: only for the cameras not found automatically,
+     separated by commas, with `:port` when ONVIF is not on port 80 (for
+     example `192.168.1.20, 192.168.1.21:2020`).
+   - **Other accounts (optional)**: if your cameras do not share one account,
+     add up to two more. Each camera is tried with the accounts in order and
+     keeps the one it accepts.
+   - **Image refresh**: how often each camera image is sent to Gladys, from 10
+     seconds to 15 minutes (1 minute by default).
+   - **Movement length**: how long a motorized camera turns or zooms for one
+     tap, when no stop follows (1 second by default).
+   - **Language of the names**: English, French, German or Spanish (French by
+     default), for the names given to the features when a camera is added.
+3. Open the **Discovery** tab of the integration: the cameras appear, with
+   their brand and model. Add the ones you want.
+4. The **Search for cameras** button of the Configuration looks again,
+   tries the accounts again and reports what each camera offers (PTZ, presets,
+   events), and which addresses refused the account.
 
-## Actions
+A camera that refuses an account is not asked again with it until you change
+the accounts or run **Search for cameras**: many cameras lock an account after
+a few wrong passwords.
 
-- **Test the weather provider** — performs a live request to Open-Meteo and
-  shows the current temperature and humidity under the button.
-- **Identify a device** — pick one of your devices in the list and it will
-  signal itself (the demo light "blinks" in the logs).
+## The Gladys devices
+
+One device per camera (a recorder or a camera with several lenses gives one
+device per video channel), named after its brand and model. Its features:
+
+- **Image**: the camera image, sent to Gladys at the chosen pace, plus a fresh
+  one a few seconds after a detection or a movement. It shows in the Gladys
+  camera widget, and the "Send a camera image" scene action takes a fresh one.
+  Images are reduced to fit the 150 KB Gladys allows (1280 pixels wide at
+  most).
+- **Movement (PTZ)**, for motorized cameras: Left, Right, Up, Down, Zoom in,
+  Zoom out, only those the camera can do. A movement lasts as long as you hold
+  the button in Gladys, and stops by itself after the **Movement length**.
+- **Preset position**, for motorized cameras: the positions saved in the
+  camera app, by their names. They are read again every 15 minutes and on each
+  search: a new or renamed position appears by itself.
+- One sensor per detection the camera reports: **Motion detection**, **Person
+  detection**, **Vehicle detection**, **Animal detection**, **Line crossing**,
+  **Intrusion detection** (1 = detected) and **Tampering**. A detection the
+  camera only reports later is added then: Gladys offers to update the device
+  in the Discovery tab.
+
+## Dashboard widget
+
+**ONVIF camera**: the camera image with the time it was taken, what the camera
+detects right now, and up to four buttons. Its settings:
+
+- **Camera**: the camera to show.
+- **Buttons**: **Left, up, down, right** (by default), **Zoom and two
+  presets**, **Four presets** or **No button**. A tap moves the camera for the
+  movement length, or to the position, and the widget comes back with the new
+  view.
+- **Preset buttons**: the names of the positions to show, separated by commas;
+  empty for the first ones.
 
 ## Scenes
 
-The integration adds its own cards to the scene editor (Gladys 5.1 or
-later), under the **Integrations** category:
+### Trigger
 
-- **Motion detected** (trigger) — starts the scene when a demo motion sensor
-  sees something move. Optionally pick the sensor and what moved (person,
-  animal); left empty, any detection matches. The following actions can
-  read what moved with `{{triggerEvent.data.target}}`.
-- **Identify a device** (action) — makes the chosen device signal itself.
-  It returns whether the device could signal itself, so the following
-  actions can depend on it.
+**ONVIF camera detection**: a camera starts detecting something. Filters:
+**Camera** and **Detection**: **Motion**, **Person**, **Vehicle**, **Animal**,
+**Line crossing**, **Intrusion**, **Tampering**, **Sound**, **Doorbell
+pressed** (for instance the button of a Reolink doorbell). Leave a filter
+empty for all. Variables: the detection (`motion`, `person`…) and the name of
+the camera rule that fired, when it gives one. One event per start of a
+detection, never one per second.
 
-## Dashboard
+### Actions
 
-Add the **Demo status** widget to a dashboard: it shows the live
-temperature of the weather station and the power of the office plug, the
-connection the plug currently uses (orange when degraded) and the observed
-location. Its **Identify the light** button makes the demo light signal
-itself.
+- **Move a camera to a preset**: turns the camera to one of its preset
+  positions, given by its name (as in the camera app) or its number. Output:
+  the position reached.
+- **Move a camera**: turns or zooms the camera in one direction (**Left**,
+  **Right**, **Up**, **Down**, **Zoom in**, **Zoom out**) for 1 to 10 seconds,
+  then stops it.
+
+To get a picture in a message, use the Gladys **Send a camera image** action:
+it asks the integration for a fresh image.
+
+### Scene ideas
+
+- At night, when the garden camera detects a person, send its image to your
+  phone, and turn the outdoor lights on.
+- When everybody leaves home, turn the living room camera to its "Door"
+  preset; when the first person comes back, turn it to the "Wall" preset.
+- When the Reolink doorbell is pressed, send its image and announce
+  "Someone at the door" on the speakers.
 
 ## Troubleshooting
 
-The integration logs everything it does: check the integration logs from the
-Gladys UI (or `docker logs` on the host) with `LOG_LEVEL=debug` for the full
-detail.
+- **No camera in the Discovery tab**: check that ONVIF is on, then run
+  **Search for cameras**. Some cameras only answer the discovery on the
+  multicast address, which Gladys cannot use from its sandbox: type their
+  address in **Camera addresses** (with `:2020` for Tapo, `:8000` for
+  Reolink).
+- **"Account refused"**: the ONVIF user is often a separate account (Tapo
+  camera account, Hikvision ONVIF user). Check it, save the configuration,
+  then run **Search for cameras**.
+- **No image**: the integration first uses the snapshot address of the
+  camera, then a frame of its video stream (RTSP); both need the account.
+- **No detection**: turn the detection on in the camera, and for Hikvision
+  link it to "Notify surveillance center". The camera must support ONVIF event
+  subscriptions (PullPoint): **Search for cameras** says "events" when it does.
+- **The camera moves too far, or not enough**: change **Movement length**.
+- The integration logs say more: **Integrations** → **ONVIF** → **Logs**.
+
+## Limits
+
+- Images, not video: one image every 10 seconds at best (Gladys takes 12 a
+  minute per camera), reduced to 1280 pixels wide.
+- Events are read by the integration from the camera (it cannot receive them
+  from the camera inside its sandbox), so a detection reaches Gladys within a
+  second or two.
+- One movement at a time, at half speed. Presets are recalled, not created:
+  save them in the camera app.
+- Cameras speaking only the newer ONVIF media service (Profile T without
+  Profile S) are not supported yet.
+- Sound and doorbell are scene triggers only, without a sensor.
+- Developed without a real camera (see above): feedback welcome.

@@ -1,0 +1,135 @@
+{
+  "source": "Event payloads of real cameras, from the tests of onvif-parsers (Apache 2.0, https://github.com/openvideolibs/onvif-parsers) and the PullMessages answer of the Happytime ONVIF server (happytime/PullMessages.xml).",
+  "notifications": [
+    {
+      "id": "hikvision-motion-alarm",
+      "topic": "tns1:VideoSource/MotionAlarm",
+      "source": [["Source", "VideoSource_1"]],
+      "data": [["State", "true"]]
+    },
+    {
+      "id": "cell-motion",
+      "topic": "tns1:RuleEngine/CellMotionDetector/Motion",
+      "source": [
+        ["VideoSourceConfigurationToken", "VideoSourceToken"],
+        ["VideoAnalyticsConfigurationToken", "VideoAnalyticsToken"],
+        ["Rule", "MyMotionDetectorRule"]
+      ],
+      "data": [["IsMotion", "true"]]
+    },
+    {
+      "id": "tapo-line-cross",
+      "topic": "tns1:RuleEngine/CellMotionDetector/LineCross",
+      "source": [
+        ["VideoSourceConfigurationToken", "vsconf"],
+        ["VideoAnalyticsConfigurationToken", "VideoAnalyticsToken"],
+        ["Rule", "MyLineCrossDetectorRule"]
+      ],
+      "data": [["IsLineCross", "true"]]
+    },
+    {
+      "id": "tapo-vehicle",
+      "topic": "tns1:RuleEngine/CellMotionDetector/TpSmartEvent",
+      "source": [
+        ["VideoSourceConfigurationToken", "vsconf"],
+        ["VideoAnalyticsConfigurationToken", "VideoAnalyticsToken"],
+        ["Rule", "MyTPSmartEventDetectorRule"]
+      ],
+      "data": [["IsVehicle", "true"]]
+    },
+    {
+      "id": "tapo-pet",
+      "topic": "tns1:RuleEngine/TPSmartEventDetector/TPSmartEvent",
+      "source": [
+        ["VideoSourceConfigurationToken", "vsconf"],
+        ["VideoAnalyticsConfigurationToken", "VideoAnalyticsToken"],
+        ["Rule", "MyTPSmartEventDetectorRule"]
+      ],
+      "data": [["IsPet", "true"]]
+    },
+    {
+      "id": "tapo-person",
+      "topic": "tns1:RuleEngine/CellMotionDetector/People",
+      "source": [
+        ["VideoSourceConfigurationToken", "vsconf"],
+        ["VideoAnalyticsConfigurationToken", "VideoAnalyticsToken"],
+        ["Rule", "MyPeopleDetectorRule"]
+      ],
+      "data": [["IsPeople", "true"]]
+    },
+    {
+      "id": "tapo-tamper",
+      "topic": "tns1:RuleEngine/CellMotionDetector/Tamper",
+      "source": [
+        ["VideoSourceConfigurationToken", "vsconf"],
+        ["VideoAnalyticsConfigurationToken", "VideoAnalyticsToken"],
+        ["Rule", "MyTamperDetectorRule"]
+      ],
+      "data": [["IsTamper", "true"]]
+    },
+    {
+      "id": "tapo-intrusion",
+      "topic": "tns1:RuleEngine/CellMotionDetector/Intrusion",
+      "source": [
+        ["VideoSourceConfigurationToken", "vsconf"],
+        ["VideoAnalyticsConfigurationToken", "VideoAnalyticsToken"],
+        ["Rule", "MyIntrusionDetectorRule"]
+      ],
+      "data": [["IsIntrusion", "true"]]
+    },
+    {
+      "id": "tapo-package",
+      "topic": "tns1:RuleEngine/PeopleDetector/People",
+      "source": [
+        ["VideoSourceConfigurationToken", "vsconf"],
+        ["VideoAnalyticsConfigurationToken", "VideoAnalyticsToken"],
+        ["Rule", "MyTPSmartEventDetectorRule"]
+      ],
+      "data": [["IsPackageDeliver", "true"]]
+    },
+    {
+      "id": "hikvision-alarm-in",
+      "topic": "tns1:Device/Trigger/tnshik:AlarmIn",
+      "source": [["AlarmInToken", "AlarmIn_1"]],
+      "data": [["State", "true"]]
+    },
+    {
+      "id": "reolink-person",
+      "topic": "tns1:RuleEngine/MyRuleDetector/PeopleDetect",
+      "source": [["Source", "000"]],
+      "data": [["State", "true"]]
+    },
+    {
+      "id": "reolink-visitor",
+      "topic": "tns1:RuleEngine/MyRuleDetector/Visitor",
+      "source": [["Source", "000"]],
+      "data": [["State", "true"]]
+    },
+    {
+      "id": "line-detector-crossed",
+      "topic": "tns1:RuleEngine/LineDetector/Crossed",
+      "source": [
+        ["VideoSourceConfigurationToken", "video_source_config1"],
+        ["VideoAnalyticsConfigurationToken", "analytics_video_source"],
+        ["Rule", "MyLineDetectorRule"]
+      ],
+      "data": [["ObjectId", "0"]]
+    },
+    {
+      "id": "field-detector",
+      "topic": "tns1:RuleEngine/FieldDetector/ObjectsInside",
+      "source": [
+        ["VideoSourceConfigurationToken", "VideoSourceToken"],
+        ["VideoAnalyticsConfigurationToken", "VideoAnalyticsToken"],
+        ["Rule", "MyFieldDetectorRule"]
+      ],
+      "data": [["IsInside", "true"]]
+    },
+    {
+      "id": "happytime-relay",
+      "topic": "tns1:Device/Trigger/Relay",
+      "source": [["RelayToken", "RelayOutputToken_1"]],
+      "data": [["LogicalState", "inactive"]]
+    }
+  ]
+}

@@ -1,67 +1,184 @@
-# Template de démonstration
+# ONVIF
 
-Ceci est la documentation utilisateur de l'intégration. Gladys ré-héberge ce
-fichier et affiche un lien **Documentation** permanent vers lui dans l'écran
-de configuration (dans la langue de l'utilisateur, avec l'anglais en repli) —
-c'est au moment de configurer que l'utilisateur en a le plus besoin. Gardez
-les courtes indications d'accueil dans les blocs `section` du `config_schema`
-du manifest ; mettez ici le pas-à-pas détaillé (captures d'écran, dépannage…).
+Intégrez vos **caméras IP ONVIF** à Gladys, sur votre réseau local : Hikvision,
+Dahua, Amcrest, Reolink, TP-Link Tapo et VIGI, Axis, Foscam, Annke, Uniview, et
+la plupart des enregistreurs vidéo réseau. Gladys les trouve, affiche leur image
+sans que vous saisissiez d'adresse de flux, oriente et zoome les caméras
+motorisées, rappelle leurs positions mémorisées et suit ce qu'elles détectent
+(mouvement, personne, véhicule, animal, franchissement de ligne, intrusion,
+sabotage), avec un widget de tableau de bord, un déclencheur et deux actions de
+scène. Pas de cloud : Gladys parle directement à chaque caméra.
 
-## Ce que vous obtenez
+> **Développée sans le matériel : vos retours sont les bienvenus.** Cette
+> intégration a été construite et testée contre le serveur ONVIF Happytime (une
+> caméra logicielle complète), contre des caméras simulées qui répondent comme
+> des modèles Hikvision et TP-Link Tapo, et contre de vrais messages
+> d'événements enregistrés par le projet onvif-parsers, pas contre une vraie
+> caméra. Si quelque chose ne marche pas comme décrit, dites-le sur le
+> [forum Gladys](https://community.gladysassistant.com) ou dans les
+> [issues](https://github.com/guim31/gladys-onvif/issues).
 
-Six appareils de démonstration apparaissent après l'installation : une
-station météo (vraies données Open-Meteo), un interrupteur, une lampe
-variable, une prise connectée avec mesure de puissance, un détecteur de
-mouvement et une caméra.
+## Ce qu'il vous faut
+
+- Gladys Assistant 5.1.0 ou plus récent.
+- Des caméras sur le même réseau que Gladys, avec **ONVIF activé**, et
+  l'identifiant et le mot de passe d'un compte ONVIF. Où les trouver :
+  - **TP-Link Tapo** : dans l'application Tapo, réglages de la caméra,
+    **Paramètres avancés** → **Compte de la caméra** : créez un identifiant et
+    un mot de passe (ce n'est pas votre compte TP-Link). ONVIF répond sur le
+    port **2020**.
+  - **Reolink** : ONVIF est activé par défaut sur la plupart des modèles (port
+    **8000**) ; sur les firmwares récents, vérifiez **Réglages** → **Réseau** →
+    **Avancé** → **Paramètres du serveur**. Utilisez un utilisateur de la
+    caméra.
+  - **Hikvision** : dans la page web de la caméra, **Configuration** →
+    **Réseau** → **Paramètres avancés** → **Protocole d'intégration** :
+    activez **Open Network Video Interface** et ajoutez-y un utilisateur ONVIF
+    (c'est une liste d'utilisateurs à part).
+  - **Dahua, Amcrest** : **Configuration** → **Réseau** → **Plateforme
+    d'accès** (ou **ONVIF**) : activez-la ; les utilisateurs de la caméra
+    fonctionnent.
+  - Autres marques : cherchez « ONVIF » dans les réglages réseau.
+- Pour les détections : activez-les dans la caméra elle-même (mouvement,
+  personne, franchissement de ligne…). Certaines marques ne les envoient en
+  ONVIF que si elles sont liées à une action, comme « Notifier le centre de
+  surveillance » chez Hikvision.
 
 ## Configuration
 
-1. Ouvrez l'onglet **Configuration** de l'intégration.
-2. Renseignez la **latitude** et la **longitude** que la station météo de
-   démonstration doit observer (Paris par défaut), et choisissez votre unité
-   de température. L'**intervalle de rafraîchissement** règle la fréquence
-   de lecture de la station météo et de la puissance de la prise : toutes
-   les 5 minutes par défaut, toutes les minutes au plus.
-3. Enregistrez : les appareils apparaissent dans l'onglet **Découverte**,
-   prêts à être ajoutés.
+1. Installez l'intégration depuis le catalogue de Gladys.
+2. Ouvrez sa **Configuration** :
+   - **Identifiant** et **Mot de passe** : le compte ONVIF de vos caméras.
+   - **Adresses des caméras** : seulement pour les caméras non trouvées
+     automatiquement, séparées par des virgules, avec `:port` quand ONVIF
+     n'est pas sur le port 80 (par exemple `192.168.1.20, 192.168.1.21:2020`).
+   - **Autres comptes (facultatif)** : si vos caméras n'ont pas toutes le même
+     compte, ajoutez-en jusqu'à deux autres. Chaque caméra est essayée avec les
+     comptes dans l'ordre et garde celui qu'elle accepte.
+   - **Rafraîchissement des images** : fréquence d'envoi de l'image de chaque
+     caméra à Gladys, de 10 secondes à 15 minutes (1 minute par défaut).
+   - **Durée d'un mouvement** : combien de temps une caméra motorisée tourne
+     ou zoome pour un appui, quand aucun arrêt ne suit (1 seconde par défaut).
+   - **Langue des noms** : anglais, français, allemand ou espagnol (français
+     par défaut), pour les noms donnés aux fonctionnalités à l'ajout d'une
+     caméra.
+3. Ouvrez l'onglet **Découverte** de l'intégration : les caméras apparaissent,
+   avec leur marque et leur modèle. Ajoutez celles que vous voulez.
+4. Le bouton **Rechercher les caméras** de la Configuration recherche à
+   nouveau, réessaie les comptes et indique ce que propose chaque caméra (PTZ,
+   positions, événements), et quelles adresses ont refusé le compte.
 
-Le réglage **Préférer la connexion locale** pilote la prise de
-démonstration : elle affiche en badge le canal réellement utilisé (local ou
-cloud), avec un point orange quand elle fonctionne en mode dégradé (local
-refusé, bascule cloud).
+Une caméra qui refuse un compte n'est plus sollicitée avec lui tant que vous
+ne changez pas les comptes ou ne lancez pas **Rechercher les caméras** :
+beaucoup de caméras bloquent un compte après quelques mauvais mots de passe.
 
-## Actions
+## Les appareils dans Gladys
 
-- **Tester le fournisseur météo** — effectue une requête en direct vers
-  Open-Meteo et affiche la température et l'humidité actuelles sous le
-  bouton.
-- **Identifier un appareil** — choisissez un de vos appareils dans la liste
-  et il se signale (la lampe de démonstration « clignote » dans les logs).
+Un appareil par caméra (un enregistreur ou une caméra à plusieurs objectifs
+donne un appareil par canal vidéo), nommé d'après sa marque et son modèle. Ses
+fonctionnalités :
+
+- **Image** : l'image de la caméra, envoyée à Gladys au rythme choisi, plus
+  une image fraîche quelques secondes après une détection ou un mouvement. Elle
+  s'affiche dans le widget caméra de Gladys, et l'action de scène « Envoyer une
+  image de caméra » en prend une fraîche. Les images sont réduites pour tenir
+  dans les 150 Ko qu'accepte Gladys (1280 pixels de large au plus).
+- **Mouvement (PTZ)**, pour les caméras motorisées : Gauche, Droite, Haut, Bas,
+  Zoomer, Dézoomer, seulement ceux que la caméra sait faire. Un mouvement dure
+  tant que vous gardez le bouton appuyé dans Gladys, et s'arrête de lui-même
+  après la **Durée d'un mouvement**.
+- **Position mémorisée**, pour les caméras motorisées : les positions
+  enregistrées dans l'application de la caméra, par leur nom. Elles sont
+  relues toutes les 15 minutes et à chaque recherche : une position nouvelle
+  ou renommée apparaît d'elle-même.
+- Un capteur par détection que la caméra annonce : **Détection de
+  mouvement**, **Détection de personne**, **Détection de véhicule**,
+  **Détection d’animal**, **Franchissement de ligne**, **Détection
+  d’intrusion** (1 = détecté) et **Sabotage**. Une détection que la caméra
+  n'annonce que plus tard est ajoutée à ce moment-là : Gladys propose de mettre
+  l'appareil à jour dans l'onglet Découverte.
+
+## Widget de tableau de bord
+
+**Caméra ONVIF** : l'image de la caméra avec l'heure de la prise, ce que la
+caméra détecte en ce moment, et jusqu'à quatre boutons. Ses réglages :
+
+- **Caméra** : la caméra à afficher.
+- **Boutons** : **Gauche, haut, bas, droite** (par défaut), **Zoom et deux
+  positions**, **Quatre positions** ou **Aucun bouton**. Un appui oriente la
+  caméra pendant la durée d'un mouvement, ou vers la position, et le widget
+  revient avec la nouvelle vue.
+- **Boutons de positions** : les noms des positions à afficher, séparés par
+  des virgules ; vide pour les premières.
 
 ## Scènes
 
-L'intégration ajoute ses propres cartes à l'éditeur de scènes (Gladys 5.1
-ou plus récent), dans la catégorie **Intégrations** :
+### Déclencheur
 
-- **Mouvement détecté** (déclencheur) — lance la scène quand un détecteur
-  de démonstration voit bouger quelque chose. Choisissez éventuellement le
-  détecteur et ce qui a bougé (personne, animal) ; laissés vides, toute
-  détection correspond. Les actions suivantes peuvent lire ce qui a bougé
-  avec `{{triggerEvent.data.target}}`.
-- **Identifier un appareil** (action) — fait se signaler l'appareil choisi.
-  Elle indique si l'appareil a pu se signaler, pour que les actions
-  suivantes puissent en dépendre.
+**Détection d'une caméra ONVIF** : une caméra commence à détecter quelque
+chose. Filtres : **Caméra** et **Détection** : **Mouvement**, **Personne**,
+**Véhicule**, **Animal**, **Franchissement de ligne**, **Intrusion**,
+**Sabotage**, **Son**, **Sonnette** (par exemple le bouton d'une sonnette
+Reolink). Laissez un filtre vide pour tout. Variables : la détection
+(`motion`, `person`…) et le nom de la règle de la caméra qui s'est
+déclenchée, quand elle en donne un. Un événement par début de détection,
+jamais un par seconde.
 
-## Tableau de bord
+### Actions
 
-Ajoutez le widget **État de la démo** à un tableau de bord : il affiche en
-direct la température de la station météo et la puissance de la prise du
-bureau, la connexion utilisée par la prise (en orange si dégradée) et la
-position observée. Son bouton **Identifier la lampe** fait se signaler la
-lampe de démonstration.
+- **Amener une caméra à une position mémorisée** : oriente la caméra vers
+  l'une de ses positions mémorisées, donnée par son nom (comme dans
+  l'application de la caméra) ou son numéro. Sortie : la position atteinte.
+- **Faire tourner une caméra** : fait tourner ou zoomer la caméra dans une
+  direction (**Gauche**, **Droite**, **Haut**, **Bas**, **Zoomer**,
+  **Dézoomer**) pendant 1 à 10 secondes, puis l'arrête.
+
+Pour recevoir une image dans un message, utilisez l'action **Envoyer une image
+de caméra** de Gladys : elle demande une image fraîche à l'intégration.
+
+### Idées de scènes
+
+- La nuit, quand la caméra du jardin détecte une personne, envoyer son image
+  sur votre téléphone et allumer l'éclairage extérieur.
+- Quand tout le monde part, orienter la caméra du salon vers sa position
+  « Porte » ; quand le premier rentre, vers sa position « Mur ».
+- Quand on sonne à la sonnette Reolink, envoyer son image et annoncer
+  « Quelqu'un à la porte » sur les enceintes.
 
 ## Dépannage
 
-L'intégration journalise tout ce qu'elle fait : consultez les logs de
-l'intégration depuis l'interface Gladys (ou `docker logs` sur l'hôte) avec
-`LOG_LEVEL=debug` pour le détail complet.
+- **Aucune caméra dans l'onglet Découverte** : vérifiez qu'ONVIF est activé,
+  puis lancez **Rechercher les caméras**. Certaines caméras ne répondent à la
+  découverte que sur l'adresse multicast, que Gladys ne peut pas utiliser
+  depuis son bac à sable : saisissez leur adresse dans **Adresses des
+  caméras** (avec `:2020` pour Tapo, `:8000` pour Reolink).
+- **« Compte refusé »** : l'utilisateur ONVIF est souvent un compte à part
+  (compte caméra Tapo, utilisateur ONVIF Hikvision). Vérifiez-le, enregistrez
+  la configuration, puis lancez **Rechercher les caméras**.
+- **Pas d'image** : l'intégration utilise d'abord l'adresse d'instantané de la
+  caméra, puis une image de son flux vidéo (RTSP) ; les deux demandent le
+  compte.
+- **Aucune détection** : activez la détection dans la caméra, et chez
+  Hikvision liez-la à « Notifier le centre de surveillance ». La caméra doit
+  accepter les abonnements aux événements ONVIF (PullPoint) : **Rechercher les
+  caméras** indique « événements » quand c'est le cas.
+- **La caméra tourne trop, ou pas assez** : changez la **Durée d'un
+  mouvement**.
+- Les logs de l'intégration en disent plus : **Intégrations** → **ONVIF** →
+  **Logs**.
+
+## Limites
+
+- Des images, pas de vidéo : une image toutes les 10 secondes au mieux (Gladys
+  en accepte 12 par minute et par caméra), réduite à 1280 pixels de large.
+- Les événements sont lus par l'intégration auprès de la caméra (elle ne peut
+  pas les recevoir de la caméra depuis son bac à sable) : une détection arrive
+  dans Gladys en une ou deux secondes.
+- Un mouvement à la fois, à mi-vitesse. Les positions se rappellent mais ne
+  se créent pas ici : enregistrez-les dans l'application de la caméra.
+- Les caméras qui ne parlent que le nouveau service média ONVIF (Profile T
+  sans Profile S) ne sont pas encore prises en charge.
+- Le son et la sonnette sont des déclencheurs de scène seulement, sans
+  capteur.
+- Développée sans vraie caméra (voir plus haut) : vos retours sont les
+  bienvenus.

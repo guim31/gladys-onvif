@@ -28,8 +28,25 @@ Gladys before reporting a problem.
 
 ## Scope
 
-In scope: the code of this repository and the Docker image it publishes.
+In scope: the code of this repository and the Docker image it publishes. In
+particular:
+
+- the camera accounts: they live in the Gladys configuration (password fields
+  are secrets) and reach the container through the SDK; they are sent to the
+  cameras only as a WS-Security password digest or an HTTP Digest answer
+  (Basic only when a camera offers nothing else), and in the RTSP address
+  given to ffmpeg for the cameras without snapshot address. They are never
+  written to `/data` nor to the logs;
+- `/data/onvif-state.json`: the cameras found (address, port, brand, model,
+  serial number, the user name of the account that works, video sources,
+  presets, detections). No password;
+- the network: HTTP (SOAP) and RTSP to the cameras of the local network, the
+  addresses the user typed or the cameras that answered the WS-Discovery probe
+  the Gladys core broadcasts; no internet access. Camera certificates are not
+  verified on HTTPS addresses (self-signed);
+- the XML read from the cameras: document types are refused, no entity is
+  expanded, sizes are bounded.
 
 Out of scope: Gladys Assistant itself (see its
 [security policy](https://github.com/GladysAssistant/Gladys/security/policy)),
-and the third-party services and devices the integration talks to.
+and the cameras and their firmware.

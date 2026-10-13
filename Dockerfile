@@ -11,7 +11,11 @@
 FROM public.ecr.aws/docker/library/node:24-alpine
 
 # dumb-init: handles signals (SIGTERM) correctly for a graceful shutdown.
-RUN apk add --no-cache dumb-init
+# ffmpeg: Gladys takes camera images of 150 KB at most, and a camera snapshot
+# weighs 200 KB to several MB: ffmpeg scales and compresses them (as the core's
+# RTSP camera service does), and grabs a frame from the RTSP stream of the
+# cameras that have no snapshot address. Runs as a child process, on pipes.
+RUN apk add --no-cache dumb-init ffmpeg
 
 WORKDIR /app
 

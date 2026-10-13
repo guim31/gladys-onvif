@@ -1,93 +1,59 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import { createFakeGladys } from '@gladysassistant/integration-sdk/testing';
-import { DEVICE_BLUEPRINTS } from '../src/devices/index.js';
-import { MOTION_DETECTED_TRIGGER, motionSensor } from '../src/devices/motionSensor.js';
-import { SCENE_ACTIONS } from '../src/scenes.js';
-import { normalizeConfig } from '../src/config.js';
+import { DIRECTIONS, SCENE_ACTIONS } from '../src/scenes.js';
+import { DEFAULT_CONFIG, FakeCamera, createWorld } from './helpers/world.js';
 
-const manifest = JSON.parse(
-  await readFile(new URL('../gladys-assistant-integration.json', import.meta.url), 'utf8'),
-);
-const config = normalizeConfig();
-
-const declarationOf = (list, key) => manifest[list].find((entry) => entry.key === key);
-const keysOf = (list) => (list ?? []).map((entry) => entry.key);
-const deviceIdOf = (gladys, key) =>
-  DEVICE_BLUEPRINTS.find((bp) => bp.key === key).deviceExternalId(gladys);
-
-// Let the async interval callback run to completion.
-const flush = () => new Promise((resolve) => setImmediate(resolve));
-
-test('the motion sensor fires one motion_detected event per detection, none on the clear', async (t) => {
-  t.mock.timers.enable({ apis: ['setInterval', 'setTimeout'] });
-  const gladys = createFakeGladys();
-  const stopPush = motionSensor.startPush(gladys, config);
-  try {
-    t.mock.timers.tick(60_000);
-    await flush();
-    assert.equal(gladys.fake.sceneEvents.length, 1, 'one detection, one event');
-    assert.equal(gladys.fake.sceneEvents[0].key, MOTION_DETECTED_TRIGGER);
-    assert.equal(gladys.fake.states.at(-1).state, 1, 'the state is still published');
-
-    t.mock.timers.tick(10_000);
-    await flush();
-    assert.equal(gladys.fake.states.at(-1).state, 0, 'the detection is cleared');
-    assert.equal(gladys.fake.sceneEvents.length, 1, 'the clear fires no event');
-  } finally {
-    stopPush();
-  }
-});
-
-test('motion_detected data only carries keys the trigger declares', async (t) => {
-  t.mock.timers.enable({ apis: ['setInterval', 'setTimeout'] });
-  const gladys = createFakeGladys();
-  const stopPush = motionSensor.startPush(gladys, config);
-  try {
-    t.mock.timers.tick(60_000);
-    await flush();
-  } finally {
-    stopPush();
-  }
-  const [{ data }] = gladys.fake.sceneEvents;
-  const trigger = declarationOf('scene_triggers', MOTION_DETECTED_TRIGGER);
-  // The core keeps the `fields` keys (filters) and the `variables` keys
-  // (exposed to the scene): any other key would be silently dropped.
-  const declared = [...keysOf(trigger.fields), ...keysOf(trigger.variables)];
-  for (const [key, value] of Object.entries(data)) {
-    assert.ok(declared.includes(key), `data.${key} is not declared, the core would drop it`);
-    assert.ok(value === null || typeof value !== 'object', `data.${key} must be a primitive`);
-  }
-  // A `"source": "devices"` filter stores a device external_id.
-  assert.equal(data.device, deviceIdOf(gladys, 'motion-sensor'));
-  const targets = trigger.fields.find((field) => field.key === 'target').options;
-  assert.ok(
-    targets.some((option) => option.value === data.target),
-    `data.target "${data.target}" must be one of the filter options`,
+test('move_camera: one direction for the given time, then stop', async (t) => {
+  const world = await createWorld({ config: { ...DEFAULT_CONFIG, move_duration: '5' } });
+  t.after(() => world.app.stop());
+  const [device] = world.fake.discoveredDevices;
+  const camera = world.network.cameras[0];
+  const started = Date.now();
+  const ack = await world.fake.sceneAction('move_camera', {
+    camera: device.external_id,
+    direction: 'zoom_out',
+    duration: 1,
+  });
+  assert.deepEqual(ack, { success: true });
+  assert.ok(Date.now() - started >= 900, 'waits for the stop');
+  assert.deepEqual(
+    camera.moves.map((item) => item.operation),
+    ['ContinuousMove', 'Stop'],
   );
+  const zoom = camera.moves[0].xml.children[1].children[0];
+  assert.equal(zoom.name, 'Zoom');
+  assert.equal(Number(zoom.attrs.x) < 0, true);
+  const bad = await world.fake.sceneAction('move_camera', {
+    camera: device.external_id,
+    direction: 'sideways',
+  });
+  assert.equal(bad.success, false);
 });
 
-test('identify_device signals the chosen device and returns the declared outputs', async () => {
-  const gladys = createFakeGladys();
-  const outputs = await SCENE_ACTIONS.identify_device(gladys, {
-    fields: { device: deviceIdOf(gladys, 'light') },
-    config,
+test('a fixed camera cannot move nor reach a preset', async (t) => {
+  const world = await createWorld({
+    cameras: [new FakeCamera({ model: 'hikvision', host: '192.0.2.21' })],
   });
-  assert.deepEqual(outputs, { signalled: true });
-  const declared = keysOf(declarationOf('scene_actions', 'identify_device').outputs);
-  for (const key of Object.keys(outputs)) {
-    assert.ok(declared.includes(key), `output "${key}" is not declared, the core would drop it`);
-  }
+  t.after(() => world.app.stop());
+  const [device] = world.fake.discoveredDevices;
+  assert.equal(
+    (await world.fake.sceneAction('move_camera', { camera: device.external_id, direction: 'left' }))
+      .success,
+    false,
+  );
+  assert.equal(
+    (await world.fake.sceneAction('goto_preset', { camera: device.external_id, preset: '1' }))
+      .success,
+    false,
+  );
+  assert.equal(
+    (await world.fake.sceneAction('goto_preset', { camera: device.external_id })).success,
+    false,
+  );
+  assert.equal((await world.fake.sceneAction('goto_preset', {})).success, false);
 });
 
-test('identify_device reports a device that cannot signal itself through its output', async () => {
-  // Not a failure: a scene action is never a condition, the scene author
-  // gates the following actions on the output instead.
-  const gladys = createFakeGladys();
-  const outputs = await SCENE_ACTIONS.identify_device(gladys, {
-    fields: { device: deviceIdOf(gladys, 'weather-station') },
-    config,
-  });
-  assert.deepEqual(outputs, { signalled: false });
+test('the directions are the movements of the Gladys contract', () => {
+  assert.deepEqual(Object.values(DIRECTIONS), [1, 2, 3, 4, 5, 6]);
+  assert.deepEqual(Object.keys(SCENE_ACTIONS), ['goto_preset', 'move_camera']);
 });
