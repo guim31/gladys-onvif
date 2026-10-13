@@ -345,3 +345,23 @@ test('unique ids: MAC first, else serial number', () => {
   assert.equal(uniqueId({ mac: null, serial: 'DS-2CD 123' }), 'sn-DS-2CD123');
   assert.equal(uniqueId({ mac: '', serial: '0000' }), null);
 });
+
+test('the images come from the container timer, with no poll from Gladys', async (t) => {
+  // Gladys 5.2.0 never polls a device created without should_poll (#3198):
+  // the integration must not wait for onPoll, and the test never calls it.
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const world = await createWorld({
+    cameras: [hikvision()],
+    timers: true,
+    config: { ...DEFAULT_CONFIG, snapshot_interval: '60' },
+    timings: { minImageSpacingMs: 0 },
+  });
+  t.after(() => world.app.stop());
+  await createAll(world);
+  const sent = world.fake.cameraImages.length;
+  for (let round = 1; round <= 3; round += 1) {
+    t.mock.timers.tick(60_000);
+    await world.hub.idle();
+    assert.equal(world.fake.cameraImages.length, sent + round, `image round ${round}`);
+  }
+});

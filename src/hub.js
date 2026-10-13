@@ -185,6 +185,9 @@ export class OnvifHub {
     this.timers = {};
     this.discovering = null;
     this.lastScan = { status: 'not-run', found: 0 };
+    // Repeated failures are logged once, then once when they end.
+    this.scanFailing = false;
+    this.statesFailing = false;
     this.stopped = false;
     this.republishTimer = null;
   }
@@ -386,6 +389,8 @@ export class OnvifHub {
       reachable: null,
       failures: 0,
       authError: false,
+      // The event subscription failed: logged once, then once when it is back.
+      eventsFailing: false,
       // Another camera answers at its address: not reachable until found again.
       displaced: false,
       events: null,
@@ -432,6 +437,7 @@ export class OnvifHub {
       presets,
       streamUri: null,
       snapshotFailures: 0,
+      streamFailing: false,
       image: null,
       imageSeq: 0,
       capturing: null,
@@ -565,13 +571,23 @@ export class OnvifHub {
       const found = parseProbeMatches(
         await this.gladys.scanNetwork('udp-active-broadcast', scanRequest()),
       );
+      if (this.scanFailing) {
+        this.scanFailing = false;
+        logger.info('Camera discovery through Gladys works again');
+      }
       this.lastScan = { status: 'ok', found: found.length };
       return found;
     } catch (err) {
       // 403: a core without mediated discovery; 429 or 409: a scan ran less
       // than 10 s ago. The typed and known addresses still work.
       const status = err.status === 429 || err.status === 409 ? 'busy' : 'unavailable';
-      logger.warn(`Camera discovery through Gladys failed: ${err.message}`);
+      // Every search (one per 15 min) fails the same way: one line, until it works.
+      if (this.scanFailing) {
+        logger.debug(`Camera discovery through Gladys failed: ${err.message}`);
+      } else {
+        this.scanFailing = true;
+        logger.warn(`Camera discovery through Gladys failed: ${err.message}`);
+      }
       this.lastScan = { status, found: 0 };
       return [];
     }
@@ -846,6 +862,20 @@ export class OnvifHub {
     if (states.length > 0) {
       // The SDK sends only the values that changed since its last publication.
       await this.gladys.publishChangedStates(states);
+      if (this.statesFailing) {
+        this.statesFailing = false;
+        logger.info('States are published to Gladys again');
+      }
+    }
+  }
+
+  /** A failed publication of states: one line until one goes through. */
+  statesFailed(camera, err) {
+    if (this.statesFailing) {
+      logger.debug(`Cannot publish the states of ${camera.uid}: ${err.message}`);
+    } else {
+      this.statesFailing = true;
+      logger.warn(`Cannot publish the states of ${camera.uid}: ${err.message}`);
     }
   }
 
@@ -855,7 +885,7 @@ export class OnvifHub {
         try {
           await this.publishStates(camera, source);
         } catch (err) {
-          logger.warn(`Cannot publish the states of ${camera.uid}: ${err.message}`);
+          this.statesFailed(camera, err);
         }
       }
     }
@@ -1059,7 +1089,11 @@ export class OnvifHub {
         // A refused snapshot counts as a failure of the snapshot address
         // only: after three, the RTSP stream takes over.
         source.snapshotFailures += 1;
-        logger.warn(`Snapshot of ${this.label(camera)} failed: ${err.message}`);
+        if (source.snapshotFailures === 1) {
+          logger.warn(`Snapshot of ${this.label(camera)} failed: ${err.message}`);
+        } else {
+          logger.debug(`Snapshot of ${this.label(camera)} failed: ${err.message}`);
+        }
       }
     }
     if (!jpeg) {
@@ -1087,9 +1121,20 @@ export class OnvifHub {
       url.password = encodeURIComponent(account.password ?? '');
     }
     try {
-      return await this.images.grab(url.toString());
+      const jpeg = await this.images.grab(url.toString());
+      if (source.streamFailing) {
+        source.streamFailing = false;
+        logger.info(`The stream of ${this.label(camera)} gives images again`);
+      }
+      return jpeg;
     } catch (err) {
-      logger.warn(`No frame from the stream of ${this.label(camera)}: ${err.message}`);
+      // Tried again at every image round: one line until it works.
+      if (source.streamFailing) {
+        logger.debug(`No frame from the stream of ${this.label(camera)}: ${err.message}`);
+      } else {
+        source.streamFailing = true;
+        logger.warn(`No frame from the stream of ${this.label(camera)}: ${err.message}`);
+      }
       throw err;
     }
   }
@@ -1267,6 +1312,9 @@ export class OnvifHub {
       try {
         await camera.client.stop(profile);
         source.moving = null;
+        if (source.stopFailures > 0) {
+          logger.info(`${this.label(camera)} stopped after ${source.stopFailures + 1} tries`);
+        }
         source.stopFailures = 0;
         this.scheduleImage(camera, source, this.timings.imageAfterMoveMs);
       } catch (err) {
@@ -1277,7 +1325,12 @@ export class OnvifHub {
           source.stopFailures = 0;
           return;
         }
-        logger.warn(`Stop of ${this.label(camera)} failed, trying again: ${err.message}`);
+        const retry = `Stop of ${this.label(camera)} failed, trying again: ${err.message}`;
+        if (source.stopFailures === 1) {
+          logger.warn(retry);
+        } else {
+          logger.debug(retry);
+        }
         this.armWatchdog(camera, source, profile, STOP_RETRY_MS);
       }
     });
@@ -1400,7 +1453,12 @@ export class OnvifHub {
         subscription = await client.createPullPoint(timings.subscriptionSeconds);
         camera.events.subscription = subscription;
         let expiresAt = Date.now() + (subscription.ttlMs ?? timings.subscriptionSeconds * 1000);
-        logger.info(`Following the events of ${this.label(camera)}`);
+        if (camera.eventsFailing) {
+          camera.eventsFailing = false;
+          logger.info(`Following the events of ${this.label(camera)} again`);
+        } else {
+          logger.info(`Following the events of ${this.label(camera)}`);
+        }
         while (!signal.aborted) {
           if (expiresAt - Date.now() < (timings.pullTimeoutSeconds + 10) * 1000) {
             const renewed = await client.renew(subscription, timings.subscriptionSeconds);
@@ -1431,7 +1489,13 @@ export class OnvifHub {
           }
           break;
         }
-        logger.warn(`Events of ${this.label(camera)} interrupted: ${err.message}`);
+        // Tried again every minute: one line until a subscription works.
+        if (camera.eventsFailing) {
+          logger.debug(`Events of ${this.label(camera)} interrupted: ${err.message}`);
+        } else {
+          camera.eventsFailing = true;
+          logger.warn(`Events of ${this.label(camera)} interrupted: ${err.message}`);
+        }
         if (err.kind === 'network') {
           await this.failed(camera);
         } else if (err.kind === 'auth') {
@@ -1476,7 +1540,7 @@ export class OnvifHub {
         camera.kinds = KINDS.filter(
           (kind) => kind === detection.kind || camera.kinds.includes(kind),
         );
-        logger.info(`${this.label(camera)} reports a new detection: ${detection.kind}`);
+        logger.debug(`${this.label(camera)} reports a new detection: ${detection.kind}`);
         this.scheduleRepublish();
       }
       const state = notification.operation === 'Deleted' ? false : detection.state;
@@ -1506,9 +1570,7 @@ export class OnvifHub {
       return;
     }
     if (SENSOR_KINDS.includes(kind)) {
-      await this.publishStates(camera, source).catch((err) =>
-        logger.warn(`Cannot publish the states of ${camera.uid}: ${err.message}`),
-      );
+      await this.publishStates(camera, source).catch((err) => this.statesFailed(camera, err));
       this.requestWidgetRefresh();
     }
     if (after && !initial && this.isCreated(camera, source) && this.triggerDue(source, detection)) {

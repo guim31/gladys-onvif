@@ -57,6 +57,7 @@ export const DEFAULT_CONFIG = { username: 'admin', password: 'secret', language:
  * @param {object} [options.config] raw integration config
  * @param {Array} [options.created] devices already created in Gladys
  * @param {boolean} [options.events] run the event subscriptions
+ * @param {boolean} [options.timers] run the periodic timers (images, health, search)
  */
 export async function createWorld({
   cameras = [new FakeCamera()],
@@ -65,6 +66,7 @@ export async function createWorld({
   created = [],
   connect = true,
   events = false,
+  timers = false,
   dataDir = mkdtempSync(join(tmpdir(), 'gladys-onvif-')),
   timings = {},
 } = {}) {
@@ -79,7 +81,7 @@ export async function createWorld({
     store: new Store(dataDir),
     request: (options) => network.request(options),
     images,
-    timers: false,
+    timers,
     events,
     timings: { ...(events ? FAST_EVENTS : {}), ...timings },
   });
